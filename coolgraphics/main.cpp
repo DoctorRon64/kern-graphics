@@ -7,15 +7,18 @@
 void processInput(GLFWwindow*& window);
 int init(GLFWwindow*& window);
 
-void CreateTriangle(GLuint &triangleVAO, int &size);
+void CreateTriangle(unsigned int& vao, int& size, unsigned int& shaderProgram);
 void CreateShaders();
-void createProgram(GLuint& programID, const char* shaderFiles[]);
+void CreateProgram(unsigned int& programID, const char* shaderFiles[]);
 
 //util
+bool CheckShaderCompilation(unsigned int shaderID, const char* shaderType);
+bool CheckProgramLinking(unsigned int programID);
+void logError(const std::string& errorMessage);
 void loadFile(const char* filename, char*& output);
 
 //programs ID
-GLuint coolProgram;
+unsigned int coolProgram;
 
 int main()
 {
@@ -23,9 +26,9 @@ int main()
 	int setup = init(window);
 	if (setup != 0) return setup;
 
-	GLuint triangleVAO;
+	unsigned int triangleVAO;
 	int triangleSize;
-	CreateTriangle(triangleVAO, triangleSize);
+	CreateTriangle(triangleVAO, triangleSize, coolProgram);
 	CreateShaders();
 
 	//create viewport
@@ -33,7 +36,7 @@ int main()
 
 	//game render loop
 	while (!glfwWindowShouldClose(window)) {
-		
+
 		//Input
 		processInput(window);
 
@@ -92,7 +95,7 @@ int init(GLFWwindow*& window) {
 	return 0;
 }
 
-void CreateTriangle(GLuint& vao, int& size) {
+void CreateTriangle(unsigned int& VAO, int& size, unsigned int& shaderProgram) {
 	//vertices of a triangle
 	float vertices[] = {
 		-0.5f, -0.5f, 0.0f,
@@ -101,78 +104,121 @@ void CreateTriangle(GLuint& vao, int& size) {
 	};
 
 	//Vertex Array Object
-	glGenBuffers(1, &vao);
-	glBindVertexArray(vao);
+	glGenBuffers(1, &VAO);
+	glBindVertexArray(VAO);
 
 	//Vertex Buffer Object
-	GLuint VBO;
+	unsigned int VBO;
 	glGenBuffers(1, &VBO);
+
+	// 1. bind Vertex Array Object
+	glBindVertexArray(VAO);
+	// 2. copy our vertices array in a buffer for OpenGL to use
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW /*Willen we het updaten of static houden*/);
-	
-	//the position of an vertex is an vertex attribute
-	//tells OpenGL how to interpret vertex data for a specific attribute.
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	// 3. then set our vertex attributes pointers
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
+
+	// 4. draw the object
+	glUseProgram(shaderProgram);
+	glBindVertexArray(VAO);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	//someOpenGLFunctionThatDrawsOurTriangle();
 
 	size = sizeof(vertices);
 }
 
 void CreateShaders() {
-	const char* shaderFiles[] = { "shaders/vertex.shader", "shaders/fragment.shader" };
-	createProgram(coolProgram, shaderFiles);
+	const char* shaderFiles[] = { "shaders/vertex.glsl", "shaders/fragment.glsl" };
+	CreateProgram(coolProgram, shaderFiles);
 }
 
-void createProgram(GLuint& programID, const char* shaderFiles[]) {
-
-	//Create a GL Program with a Vertex & Fragment Shader
+void CreateProgram(unsigned int& shaderProgram, const char* shaderFiles[])
+{
+	// vertex Shader
 	char* vertexSource;
-	char* fragmentSource;
-
-	//load in from shader files
 	loadFile(shaderFiles[0], vertexSource);
-	loadFile(shaderFiles[1], fragmentSource);
 
-	GLuint vertexShaderID, fragmentShaderID;
-
+	unsigned int vertexShaderID;
 	vertexShaderID = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShaderID, 1, &vertexSource, nullptr);
+	glShaderSource(vertexShaderID, 1, &vertexSource, NULL);
 	glCompileShader(vertexShaderID);
 
-	int success;
-	char infoLog[512];
-	glGetShaderiv(vertexShaderID, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		glGetShaderInfoLog(vertexShaderID, 512, nullptr, infoLog);
-		std::cout << "o no error while compilng vertex shader\n" << infoLog << std::endl;
-	}
+	if (!CheckShaderCompilation(vertexShaderID, "VERTEX"))
+		return;
 
+	// fragment Shader
+	char* fragmentSource;
+	loadFile(shaderFiles[1], fragmentSource);
+
+	unsigned int fragmentShaderID;
 	fragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShaderID, 1, &fragmentSource, nullptr);
+	glShaderSource(fragmentShaderID, 1, &fragmentSource, NULL);
 	glCompileShader(fragmentShaderID);
 
-	glGetShaderiv(fragmentShaderID, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		glGetShaderInfoLog(fragmentShaderID, 512, nullptr, infoLog);
-		std::cout << "o no error while compilng vertex shader\n" << infoLog << std::endl;
-	}
+	if (!CheckShaderCompilation(fragmentShaderID, "FRAGMENT"))
+		return;
 
-	programID = glCreateProgram();
-	glAttachShader(programID, vertexShaderID);
-	glAttachShader(programID, fragmentShaderID);
-	glLinkProgram(programID);
+	// Create Program
+	shaderProgram = glCreateProgram();
+	glAttachShader(shaderProgram, vertexShaderID);
+	glAttachShader(shaderProgram, fragmentShaderID);
+	glLinkProgram(shaderProgram);
 
-	glGetShaderiv(programID, GL_LINK_STATUS, &success);
-	if (!success) {
-		glGetProgramInfoLog(programID, 512, nullptr, infoLog);
-		std::cout << "o no link program something\n" << infoLog << std::endl;
-	}
+	if (!CheckProgramLinking(shaderProgram))
+		return;
+
+	glUseProgram(shaderProgram);
 
 	glDeleteShader(vertexShaderID);
 	glDeleteShader(fragmentShaderID);
 
-	delete vertexSource;
-	delete fragmentSource;
+	delete[] vertexSource;
+	delete[] fragmentSource;
+}
+
+bool CheckShaderCompilation(unsigned int shaderID, const char* shaderType)
+{
+	int  success;
+	char infoLog[512];
+	glGetShaderiv(shaderID, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(shaderID, 512, NULL, infoLog);
+		logError("ERROR::SHADER::" + std::string(shaderType) + "::COMPILATION_FAILED\n" + infoLog);
+		return false;
+	}
+	return true;
+}
+
+bool CheckProgramLinking(unsigned int programID)
+{
+	int success;
+	char infoLog[512];
+	glGetProgramiv(programID, GL_LINK_STATUS, &success);
+	if (!success)
+	{
+		glGetProgramInfoLog(programID, 512, nullptr, infoLog);
+		logError("ERROR::PROGRAM::LINKING_FAILED\n" + std::string(infoLog));
+		return false;
+	}
+
+	glValidateProgram(programID);
+	glGetProgramiv(programID, GL_VALIDATE_STATUS, &success);
+	if (!success)
+	{
+		glGetProgramInfoLog(programID, 512, nullptr, infoLog);
+		logError("ERROR::PROGRAM::VALIDATION_FAILED\n" + std::string(infoLog));
+		return false;
+	}
+
+	return true;
+}
+
+void logError(const std::string& errorMessage)
+{
+	std::cerr << errorMessage << std::endl;
 }
 
 void loadFile(const char* filename, char*& output) {
