@@ -18,6 +18,8 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 
 // Program ID
 unsigned int shaderProgram;
+unsigned int screenWidth = 800;
+unsigned int screenHeight = 600;
 
 int main()
 {
@@ -31,7 +33,11 @@ int main()
 	CreateShaders();
 
 	// Create viewport
-	glViewport(0, 0, 800, 600);
+	glViewport(0, 0, screenWidth, screenHeight);
+
+	// Activate the shader program
+	glUseProgram(shaderProgram);
+	glUniform2f(glGetUniformLocation(shaderProgram, "iResolution"), screenWidth, screenHeight);
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -43,8 +49,7 @@ int main()
 		glClearColor(1.0f, 0.0f, 0.0f, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		// Activate the shader program
-		glUseProgram(shaderProgram);
+		glUniform1f(glGetUniformLocation(shaderProgram, "iTime"), (float)glfwGetTime());
 
 		// Bind vertex array and draw
 		glBindVertexArray(triangleVAO);
@@ -99,10 +104,10 @@ void CreateTriangle(unsigned int& VAO, int& size)
 {
 	// Define vertices of the triangle
 	float vertices[] = {
-		0.5f,  0.5f, 0.0f,
-		0.5f, -0.5f, 0.0f,
-	   -0.5f, -0.5f, 0.0f,
-	   -0.5f,  0.5f, 0.0f
+		1.0f,  1.0f, 0.0f,
+		1.0f, -1.0f, 0.0f,
+	   -1.0f, -1.0f, 0.0f,
+	   -1.0f,  1.0f, 0.0f
 	};
 	unsigned int indices[] = {
 		0, 1, 3,
@@ -136,7 +141,7 @@ void CreateTriangle(unsigned int& VAO, int& size)
 void CreateShaders()
 {
 	// Create shader program
-	CreateProgram(shaderProgram, "shaders/vertex.glsl", "shaders/fragment.glsl");
+	CreateProgram(shaderProgram, "shaders/vertex.glsl", "shaders/cineshaderlava.glsl");
 }
 
 void CreateProgram(unsigned int& programId, const char* vertex, const char* fragment) {
