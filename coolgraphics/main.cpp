@@ -19,7 +19,7 @@ int init(GLFWwindow*& window);
 //Create Stuff
 void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
-void CreateTriangle(unsigned int& VAO, int& size);
+void CreateGeometry(unsigned int& VAO, int& size);
 unsigned int loadTexture(const char* path);
 
 //util
@@ -37,18 +37,28 @@ int main()
 	int setup = init(window);
 	if (setup != 0) return setup;
 
-	unsigned int triangleVAO;
-	int triangleSize;
-	CreateTriangle(triangleVAO, triangleSize);
+	unsigned int VAO;
+	int geometrySize;
+	CreateGeometry(VAO, geometrySize);
 	CreateShaders();
 
-	unsigned int boxTex = loadTexture("textures/cardbox.jpg");
+	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
+
+	//Matrices!
+	const float FOV = 45.0f;
+	const float degrees = 80.0f;
+	
+	glm::mat4 world = glm::mat4(1.0f);
+	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
+	world = glm::scale(world, glm::vec3(1, 1, 1));
+	world = glm::translate(world, glm::vec3(0, 0, 0));
+
+	glm::mat4 view = glm::lookAt(glm::vec3(0, 2.5f, -5.0f), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+	glm::mat4 projection = glm::perspective(FOV, screenWidth / (float)screenHeight, 0.1f, 100.0f);
+	glm::vec3 lightPos = glm::vec3(5.0f, 3.0f, 1.0f);
 
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
-
-	// Activate the shader program
-	glUseProgram(shaderProgram);
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -57,12 +67,24 @@ int main()
 		processInput(window);
 
 		// Rendering
-		glClearColor(1.0f, 0.0f, 0.0f, 1.0);
+		glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
+		// Activate the shader program
+		glUseProgram(shaderProgram);
+
+		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
+		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+		glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, boxTexure);
+
 		// Bind vertex array and draw
-		glBindVertexArray(triangleVAO);
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(VAO);
+		glDrawElements(GL_TRIANGLES, geometrySize, GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
 
 		// Swap buffers and poll events
@@ -109,7 +131,7 @@ int init(GLFWwindow*& window) {
 	return 0;
 }
 
-void CreateTriangle(unsigned int& VAO, int& size)
+void CreateGeometry(unsigned int& VAO, int& size)
 {
 	// need 24 vertices for normal/uv-mapped Cube
 	float vertices[] = {
@@ -194,11 +216,18 @@ void CreateTriangle(unsigned int& VAO, int& size)
 	// Set vertex attribute pointers
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
 	glEnableVertexAttribArray(0);
+
+	//color to shader
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
+	//uv to shader
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+	glEnableVertexAttribArray(2);
 
-	// Set size of vertices array
+	//normal to shader
+	glVertexAttribPointer(3, 3, GL_FLOAT, GL_TRUE, stride, (void*)(8 * sizeof(float)));
+	glEnableVertexAttribArray(3);
 }
 
 void CreateShaders()
