@@ -3,14 +3,24 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+//loading textures
+#define STB_IMAGE_IMPLEMENTATION
+#include "util/stb_image.h"
+
+//glm opensource
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 //Forward Declarations
 void processInput(GLFWwindow*& window);
 int init(GLFWwindow*& window);
 
 //Create Stuff
-void CreateTriangle(unsigned int& VAO, int& size);
 void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
+void CreateTriangle(unsigned int& VAO, int& size);
+unsigned int loadTexture(const char* path);
 
 //util
 void loadFile(const char* fileName, char*& output);
@@ -32,12 +42,13 @@ int main()
 	CreateTriangle(triangleVAO, triangleSize);
 	CreateShaders();
 
+	unsigned int boxTex = loadTexture("textures/cardbox.jpg");
+
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
 
 	// Activate the shader program
 	glUseProgram(shaderProgram);
-	glUniform2f(glGetUniformLocation(shaderProgram, "iResolution"), screenWidth, screenHeight);
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -48,8 +59,6 @@ int main()
 		// Rendering
 		glClearColor(1.0f, 0.0f, 0.0f, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
-
-		glUniform1f(glGetUniformLocation(shaderProgram, "iTime"), (float)glfwGetTime());
 
 		// Bind vertex array and draw
 		glBindVertexArray(triangleVAO);
@@ -102,17 +111,69 @@ int init(GLFWwindow*& window) {
 
 void CreateTriangle(unsigned int& VAO, int& size)
 {
-	// Define vertices of the triangle
+	// need 24 vertices for normal/uv-mapped Cube
 	float vertices[] = {
-		1.0f,  1.0f, 0.0f,
-		1.0f, -1.0f, 0.0f,
-	   -1.0f, -1.0f, 0.0f,
-	   -1.0f,  1.0f, 0.0f
+		// positions            //colors            // tex coords   // normals
+		0.5f, -0.5f, -0.5f,     1.0f, 1.0f, 1.0f,   1.f, 0.f,       0.f, -1.f, 0.f,
+		0.5f, -0.5f, 0.5f,      1.0f, 1.0f, 1.0f,   1.f, 1.f,       0.f, -1.f, 0.f,
+		-0.5f, -0.5f, 0.5f,     1.0f, 1.0f, 1.0f,   0.f, 1.f,       0.f, -1.f, 0.f,
+		-0.5f, -0.5f, -.5f,     1.0f, 1.0f, 1.0f,   0.f, 0.f,       0.f, -1.f, 0.f,
+
+		0.5f, 0.5f, -0.5f,      1.0f, 1.0f, 1.0f,   2.f, 0.f,       1.f, 0.f, 0.f,
+		0.5f, 0.5f, 0.5f,       1.0f, 1.0f, 1.0f,   2.f, 1.f,       1.f, 0.f, 0.f,
+
+		0.5f, 0.5f, 0.5f,       1.0f, 1.0f, 1.0f,   1.f, 2.f,       0.f, 0.f, 1.f,
+		-0.5f, 0.5f, 0.5f,      1.0f, 1.0f, 1.0f,   0.f, 2.f,       0.f, 0.f, 1.f,
+
+		-0.5f, 0.5f, 0.5f,      1.0f, 1.0f, 1.0f,   -1.f, 1.f,      -1.f, 0.f, 0.f,
+		-0.5f, 0.5f, -.5f,      1.0f, 1.0f, 1.0f,   -1.f, 0.f,      -1.f, 0.f, 0.f,
+
+		-0.5f, 0.5f, -.5f,      1.0f, 1.0f, 1.0f,   0.f, -1.f,      0.f, 0.f, -1.f,
+		0.5f, 0.5f, -0.5f,      1.0f, 1.0f, 1.0f,   1.f, -1.f,      0.f, 0.f, -1.f,
+
+		-0.5f, 0.5f, -.5f,      1.0f, 1.0f, 1.0f,   3.f, 0.f,       0.f, 1.f, 0.f,
+		-0.5f, 0.5f, 0.5f,      1.0f, 1.0f, 1.0f,   3.f, 1.f,       0.f, 1.f, 0.f,
+
+		0.5f, -0.5f, 0.5f,      1.0f, 1.0f, 1.0f,   1.f, 1.f,       0.f, 0.f, 1.f,
+		-0.5f, -0.5f, 0.5f,     1.0f, 1.0f, 1.0f,   0.f, 1.f,       0.f, 0.f, 1.f,
+
+		-0.5f, -0.5f, 0.5f,     1.0f, 1.0f, 1.0f,   0.f, 1.f,       -1.f, 0.f, 0.f,
+		-0.5f, -0.5f, -.5f,     1.0f, 1.0f, 1.0f,   0.f, 0.f,       -1.f, 0.f, 0.f,
+
+		-0.5f, -0.5f, -.5f,     1.0f, 1.0f, 1.0f,   0.f, 0.f,       0.f, 0.f, -1.f,
+		0.5f, -0.5f, -0.5f,     1.0f, 1.0f, 1.0f,   1.f, 0.f,       0.f, 0.f, -1.f,
+
+		0.5f, -0.5f, -0.5f,     1.0f, 1.0f, 1.0f,   1.f, 0.f,       1.f, 0.f, 0.f,
+		0.5f, -0.5f, 0.5f,      1.0f, 1.0f, 1.0f,   1.f, 1.f,       1.f, 0.f, 0.f,
+
+		0.5f, 0.5f, -0.5f,      1.0f, 1.0f, 1.0f,   2.f, 0.f,       0.f, 1.f, 0.f,
+		0.5f, 0.5f, 0.5f,       1.0f, 1.0f, 1.0f,   2.f, 1.f,       0.f, 1.f, 0.f
 	};
-	unsigned int indices[] = {
-		0, 1, 3,
-		1, 2, 3
+
+	unsigned int indices[] = {  // note that we start from 0!
+		// DOWN
+		0, 1, 2,   // first triangle
+		0, 2, 3,    // second triangle
+		// BACK
+		14, 6, 7,   // first triangle
+		14, 7, 15,    // second triangle
+		// RIGHT
+		20, 4, 5,   // first triangle
+		20, 5, 21,    // second triangle
+		// LEFT
+		16, 8, 9,   // first triangle
+		16, 9, 17,    // second triangle
+		// FRONT
+		18, 10, 11,   // first triangle
+		18, 11, 19,    // second triangle
+		// UP
+		22, 12, 13,   // first triangle
+		22, 13, 23,    // second triangle
 	};
+
+	int stride = (3 + 3 + 2 + 3) * sizeof(float);
+	//3 position // 3 colors //2 tex coords //3 normals
+	size = sizeof(vertices) / stride;
 
 	// Generate vertex array object (VAO)
 	glGenVertexArrays(1, &VAO);
@@ -131,17 +192,19 @@ void CreateTriangle(unsigned int& VAO, int& size)
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 	// Set vertex attribute pointers
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
 	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+
 
 	// Set size of vertices array
-	size = sizeof(vertices);
 }
 
 void CreateShaders()
 {
 	// Create shader program
-	CreateProgram(shaderProgram, "shaders/vertex.glsl", "shaders/cineshaderlava.glsl");
+	CreateProgram(shaderProgram, "shaders/vertex.glsl", "shaders/fragment.glsl");
 }
 
 void CreateProgram(unsigned int& programId, const char* vertex, const char* fragment) {
@@ -161,6 +224,7 @@ void CreateProgram(unsigned int& programId, const char* vertex, const char* frag
 	int success;
 	char infoLog[512];
 	success = 0;
+
 	InfoShaderLog(vertexShaderId, success, infoLog);
 
 	// Create fragment shader
@@ -177,6 +241,8 @@ void CreateProgram(unsigned int& programId, const char* vertex, const char* frag
 	glLinkProgram(programId);
 
 	glGetProgramiv(programId, GL_LINK_STATUS, &success);
+
+
 	if (!success) {
 		glGetProgramInfoLog(programId, 512, nullptr, infoLog);
 		std::cout << "ERROR::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
@@ -215,4 +281,34 @@ void loadFile(const char* fileName, char*& output)
 	else {
 		output = nullptr;
 	}
+}
+
+unsigned int loadTexture(const char* path) 
+{
+	//Gen & Bind texture Id
+	unsigned int textureId;
+	glGenTextures(1, &textureId);
+	glBindTexture(GL_TEXTURE_2D, textureId);
+
+	//set Texture Paramters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	//LoadTexture
+	int width, height, nrChannels;
+	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
+	if (data) {
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+	}
+	else {
+		std::cout << "Error loading texture: " << path << std::endl;
+	}
+	
+	//Set data
+	stbi_image_free(data);
+
+	//unload texture
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	return textureId;
 }
