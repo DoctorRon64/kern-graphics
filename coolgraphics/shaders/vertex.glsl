@@ -9,17 +9,15 @@ out vec2 uv;
 out vec3 normal;
 out vec4 worldPos;
 
-uniform mat4 world;
-uniform mat4 view;
-uniform mat4 projection;
+uniform mat4 world, view, projection;
 
 void main()
 {
+    //inverse order object > world > camera > projection
     gl_Position = projection * view * world * vec4(vPos, 1.0f);
-
     color = vColor;
     uv = vUv;
-
     normal = mat3(world) * vNormal;
+
     worldPos = world * vec4(vPos, 1.0);
 }

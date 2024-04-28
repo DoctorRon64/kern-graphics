@@ -19,7 +19,7 @@ int init(GLFWwindow*& window);
 //Create Stuff
 void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
-void CreateGeometry(unsigned int& VAO, int& size);
+void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path);
 
 //util
@@ -31,31 +31,23 @@ unsigned int shaderProgram;
 unsigned int screenWidth = 800;
 unsigned int screenHeight = 600;
 
+const float FOV = 45.0f;
+float degrees = 45.0f;
+glm::vec3 boxSize = glm::vec3(2.0f, 2.0f, 2.0f);
+glm::vec3 boxTrans = glm::vec3(0.0f, 0.0f, 0.0f);
+
 int main()
 {
 	GLFWwindow* window;
 	int setup = init(window);
 	if (setup != 0) return setup;
 
-	unsigned int VAO;
-	int geometrySize;
-	CreateGeometry(VAO, geometrySize);
+	unsigned int VAO, EBO;
+	int geometrySize, geometryIndexCount;
+	CreateGeometry(VAO, EBO, geometrySize, geometryIndexCount);
 	CreateShaders();
 
-	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
-
-	//Matrices!
-	const float FOV = 45.0f;
-	const float degrees = 80.0f;
-	
-	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
-	world = glm::scale(world, glm::vec3(1, 1, 1));
-	world = glm::translate(world, glm::vec3(0, 0, 0));
-
-	glm::mat4 view = glm::lookAt(glm::vec3(0, 2.5f, -5.0f), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-	glm::mat4 projection = glm::perspective(FOV, screenWidth / (float)screenHeight, 0.1f, 100.0f);
-	glm::vec3 lightPos = glm::vec3(5.0f, 3.0f, 1.0f);
+	glEnable(GL_CULL_FACE);
 
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
@@ -63,11 +55,28 @@ int main()
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
 
+		if (degrees > 360) {
+			degrees = 0;
+		}
+		degrees += 1;
+
+		//Matrices!
+		unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
+
+		glm::mat4 world = glm::mat4(1.0f);
+		world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
+		world = glm::scale(world, boxSize);
+		world = glm::translate(world, boxTrans);
+
+		glm::mat4 view = glm::lookAt(glm::vec3(0, 2.5f, -5.0f), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+		glm::mat4 projection = glm::perspective(FOV, screenWidth / (float)screenHeight, 0.1f, 100.0f);
+		glm::vec3 lightPos = glm::vec3(5.0f, 5.0f, 1.0f);
+
 		// Input handling
 		processInput(window);
 
 		// Rendering
-		glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+		glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		// Activate the shader program
@@ -76,7 +85,6 @@ int main()
 		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
 		glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
 
 		glActiveTexture(GL_TEXTURE0);
@@ -84,13 +92,13 @@ int main()
 
 		// Bind vertex array and draw
 		glBindVertexArray(VAO);
-		glDrawElements(GL_TRIANGLES, geometrySize, GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
+		glDrawElements(GL_TRIANGLES, geometryIndexCount, GL_UNSIGNED_INT, 0);
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
+
 	return 0;
 }
 
@@ -131,7 +139,7 @@ int init(GLFWwindow*& window) {
 	return 0;
 }
 
-void CreateGeometry(unsigned int& VAO, int& size)
+void CreateGeometry(unsigned int& VAO, unsigned int &EBO ,int& size, int& numIndices)
 {
 	// need 24 vertices for normal/uv-mapped Cube
 	float vertices[] = {
@@ -196,6 +204,7 @@ void CreateGeometry(unsigned int& VAO, int& size)
 	int stride = (3 + 3 + 2 + 3) * sizeof(float);
 	//3 position // 3 colors //2 tex coords //3 normals
 	size = sizeof(vertices) / stride;
+	numIndices = sizeof(indices) / sizeof(int);
 
 	// Generate vertex array object (VAO)
 	glGenVertexArrays(1, &VAO);
@@ -208,7 +217,6 @@ void CreateGeometry(unsigned int& VAO, int& size)
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
 	//Generate element buffer object (EBO)
-	unsigned int EBO;
 	glGenBuffers(1, &EBO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
@@ -271,7 +279,6 @@ void CreateProgram(unsigned int& programId, const char* vertex, const char* frag
 
 	glGetProgramiv(programId, GL_LINK_STATUS, &success);
 
-
 	if (!success) {
 		glGetProgramInfoLog(programId, 512, nullptr, infoLog);
 		std::cout << "ERROR::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
@@ -327,7 +334,13 @@ unsigned int loadTexture(const char* path)
 	int width, height, nrChannels;
 	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
 	if (data) {
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		if (nrChannels == 3) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		}
+		else if (nrChannels == 4) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		}
+		glGenerateMipmap(GL_TEXTURE_2D);
 	}
 	else {
 		std::cout << "Error loading texture: " << path << std::endl;
