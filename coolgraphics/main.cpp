@@ -52,26 +52,23 @@ int main()
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
 
+	glm::vec3 lightPos = glm::vec3(0.0f, 2.5f, 1.0f);
+	glm::vec3 camPos = glm::vec3(0, 2.5f, -5.0f);
+	
+	//Matrices!
+	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
+	unsigned int boxNormalMap = loadTexture("textures/cardbox_normal.png");
+
+	glm::mat4 world = glm::mat4(1.0f);
+
+	world = glm::scale(world, boxSize);
+	world = glm::translate(world, boxTrans);
+	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
+	glm::mat4 view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+	glm::mat4 projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
+
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
-
-		if (degrees > 360) {
-			degrees = 0;
-		}
-		degrees += 1;
-
-		//Matrices!
-		unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
-		unsigned int boxNormalMap = loadTexture("textures/cardbox_normal.png");
-
-		glm::mat4 world = glm::mat4(1.0f);
-		world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
-		world = glm::scale(world, boxSize);
-		world = glm::translate(world, boxTrans);
-
-		glm::mat4 view = glm::lookAt(glm::vec3(0, 2.5f, -5.0f), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-		glm::mat4 projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
-		glm::vec3 lightPos = glm::vec3(5.0f, 5.0f, 1.0f);
 
 		// Input handling
 		processInput(window);
@@ -87,7 +84,9 @@ int main()
 		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
 		glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
+		glUniform3fv(glGetUniformLocation(shaderProgram, "camPos"), 1, glm::value_ptr(camPos));
 
 		//set texture channels
 		glUniform1i(glGetUniformLocation(shaderProgram, "mainTexture"), 0);
