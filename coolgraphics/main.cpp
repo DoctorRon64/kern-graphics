@@ -21,6 +21,7 @@ void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path);
+glm::vec3 getRandCol(glm::vec3 colors[], int numColors);
 
 //util
 void loadFile(const char* fileName, char*& output);
@@ -59,16 +60,35 @@ int main()
 	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
 	unsigned int boxNormalMap = loadTexture("textures/cardbox_normal.png");
 
-	glm::mat4 world = glm::mat4(1.0f);
 
-	world = glm::scale(world, boxSize);
-	world = glm::translate(world, boxTrans);
-	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
-	glm::mat4 view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-	glm::mat4 projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
+
+
+
+	// Usage
+	glm::vec3 rainbowColors[] = {
+		glm::vec3(1.0f, 0.0f, 0.0f),   // Red
+		glm::vec3(1.0f, 0.5f, 0.0f),   // Orange
+		glm::vec3(1.0f, 1.0f, 0.0f),   // Yellow
+		glm::vec3(0.0f, 1.0f, 0.0f),   // Green
+		glm::vec3(0.0f, 0.0f, 1.0f),   // Blue
+		glm::vec3(0.75f, 0.0f, 0.75f)  // Purple
+	};
+	int numColors = sizeof(rainbowColors) / sizeof(rainbowColors[0]);
+
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
+
+		degrees += .01;
+		if (degrees > 360) {
+			degrees = 0;
+		}
+		glm::mat4 world = glm::mat4(1.0f);
+		world = glm::scale(world, boxSize);
+		world = glm::translate(world, boxTrans);
+		world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
+		glm::mat4 view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+		glm::mat4 projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
 
 		// Input handling
 		processInput(window);
@@ -96,6 +116,25 @@ int main()
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, boxTexure);
 
+		// Set lighting colors
+		glm::vec3 lightColorAmbient = getRandCol(rainbowColors, numColors);//glm::vec3(1.2f, 0.0f, 0.0f); // Ambient light color (gray)
+		glm::vec3 lightColorDiffuse = glm::vec3(0.8f, 0.8f, 0.8f); // Diffuse light color (white)
+		glm::vec3 lightColorSpecular = glm::vec3(1.0f, 1.0f, 1.0f); // Specular light color (white)
+
+		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorAmbient"), 1, glm::value_ptr(lightColorAmbient));
+		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorDiffuse"), 1, glm::value_ptr(lightColorDiffuse));
+		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorSpecular"), 1, glm::value_ptr(lightColorSpecular));
+
+		glm::vec3 lightPos2 = glm::vec3(-1.0f, 1.0f, 0.0f);
+		glm::vec3 lightColorAmbient2 = glm::vec3(0.2f, 1.2f, 0.2f);
+		glm::vec3 lightColorDiffuse2 = glm::vec3(0.7f, 0.7f, 0.7f);
+		glm::vec3 lightColorSpecular2 = glm::vec3(1.0f, 1.0f, 1.0f);
+
+		glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos2"), 1, glm::value_ptr(lightPos2));
+		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorAmbient2"), 1, glm::value_ptr(lightColorAmbient2));
+		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorDiffuse2"), 1, glm::value_ptr(lightColorDiffuse2));
+		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorSpecular2"), 1, glm::value_ptr(lightColorSpecular2));
+
 		// Bind vertex array and draw
 		glBindVertexArray(VAO);
 		glDrawElements(GL_TRIANGLES, geometryIndexCount, GL_UNSIGNED_INT, 0);
@@ -112,6 +151,17 @@ void processInput(GLFWwindow*& window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
+}
+
+glm::vec3 getRandCol(glm::vec3 colors[], int numColors) {
+	float time = glfwGetTime();
+	float colorIndex = fmod(time, numColors);
+	int colorIndex1 = static_cast<int>(colorIndex) % numColors;
+	int colorIndex2 = (colorIndex1 + 1) % numColors;
+	float factor = colorIndex - floor(colorIndex);
+	glm::vec3 interpolatedColor = glm::mix(colors[colorIndex1], colors[colorIndex2], factor);
+
+	return interpolatedColor;
 }
 
 int init(GLFWwindow*& window) {
