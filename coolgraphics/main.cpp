@@ -21,9 +21,10 @@ void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path);
-glm::vec3 getRandCol(glm::vec3 colors[], int numColors);
 
 //util
+glm::vec3 getRandCol(glm::vec3 colors[], int numColors);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void loadFile(const char* fileName, char*& output);
 void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 
@@ -32,7 +33,7 @@ unsigned int shaderProgram;
 unsigned int screenWidth = 800;
 unsigned int screenHeight = 600;
 
-const float FOV = 25.0f;
+float FOV = 25.0f;
 float degrees = 45.0f;
 glm::vec3 boxSize = glm::vec3(1.0f, 1.0f, 1.0f);
 glm::vec3 boxTrans = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -60,10 +61,6 @@ int main()
 	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
 	unsigned int boxNormalMap = loadTexture("textures/cardbox_normal.png");
 
-
-
-
-
 	// Usage
 	glm::vec3 rainbowColors[] = {
 		glm::vec3(1.0f, 0.0f, 0.0f),   // Red
@@ -79,10 +76,11 @@ int main()
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
 
-		degrees += .01;
+		degrees += 1;
 		if (degrees > 360) {
 			degrees = 0;
 		}
+
 		glm::mat4 world = glm::mat4(1.0f);
 		world = glm::scale(world, boxSize);
 		world = glm::translate(world, boxTrans);
@@ -151,6 +149,12 @@ void processInput(GLFWwindow*& window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
+
+	glfwSetScrollCallback(window, scroll_callback);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+	FOV -= static_cast<float>(yoffset);
 }
 
 glm::vec3 getRandCol(glm::vec3 colors[], int numColors) {
