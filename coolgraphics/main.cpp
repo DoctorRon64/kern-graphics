@@ -8,8 +8,10 @@
 #include "util/stb_image.h"
 
 //glm opensource
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 //Forward Declarations
@@ -21,22 +23,36 @@ void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path);
+void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 rainbowColors[], int numColors, glm::mat4 world);
+void RenderSkybox(glm::mat4 world);
 
 //util
 glm::vec3 getRandCol(glm::vec3 colors[], int numColors);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void scroll_callback(GLFWwindow* window, double xpos, double ypos);
 void loadFile(const char* fileName, char*& output);
 void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 
 // Program ID
-unsigned int shaderProgram;
+unsigned int shaderProgram, skyProgram;
 unsigned int screenWidth = 800;
 unsigned int screenHeight = 600;
 
-float FOV = 25.0f;
+glm::vec3 lightDir = glm::vec3(-1.0f, -2.5f, -1.0f);
+glm::vec3 camPos = glm::vec3(0, 2.5f, -5.0f);
+glm::mat4 view;
+glm::mat4 projection;
+
+unsigned int boxVAO, boxEBO;
+int boxSize, boxIndexCount;
+static float FOV = 80.0f;
 float degrees = 45.0f;
-glm::vec3 boxSize = glm::vec3(1.0f, 1.0f, 1.0f);
+glm::vec3 boxTransformSize = glm::vec3(1.0f, 1.0f, 1.0f);
 glm::vec3 boxTrans = glm::vec3(0.0f, 0.0f, 0.0f);
+
+float lastX, lastY;
+bool firstMouse = true;
+float camYaw, camPitch;
 
 int main()
 {
@@ -44,9 +60,7 @@ int main()
 	int setup = init(window);
 	if (setup != 0) return setup;
 
-	unsigned int VAO, EBO;
-	int geometrySize, geometryIndexCount;
-	CreateGeometry(VAO, EBO, geometrySize, geometryIndexCount);
+	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
 	CreateShaders();
 
 	glEnable(GL_CULL_FACE);
@@ -54,9 +68,6 @@ int main()
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
 
-	glm::vec3 lightPos = glm::vec3(0.0f, 2.5f, 1.0f);
-	glm::vec3 camPos = glm::vec3(0, 2.5f, -5.0f);
-	
 	//Matrices!
 	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
 	unsigned int boxNormalMap = loadTexture("textures/cardbox_normal.png");
@@ -72,6 +83,8 @@ int main()
 	};
 	int numColors = sizeof(rainbowColors) / sizeof(rainbowColors[0]);
 
+	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -81,13 +94,6 @@ int main()
 			degrees = 0;
 		}
 
-		glm::mat4 world = glm::mat4(1.0f);
-		world = glm::scale(world, boxSize);
-		world = glm::translate(world, boxTrans);
-		world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
-		glm::mat4 view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-		glm::mat4 projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
-
 		// Input handling
 		processInput(window);
 
@@ -95,47 +101,14 @@ int main()
 		glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
+		glm::mat4 world = glm::mat4(1.0f);
+		world = glm::translate(world, camPos);
+		world = glm::scale(world, boxTransformSize);
+		world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
+
 		// Activate the shader program
-		glUseProgram(shaderProgram);
-
-		//set channels world
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
-		glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
-		glUniform3fv(glGetUniformLocation(shaderProgram, "camPos"), 1, glm::value_ptr(camPos));
-
-		//set texture channels
-		glUniform1i(glGetUniformLocation(shaderProgram, "mainTexture"), 0);
-		glUniform1i(glGetUniformLocation(shaderProgram, "normalMap"), 1);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, boxNormalMap);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, boxTexure);
-
-		// Set lighting colors
-		glm::vec3 lightColorAmbient = getRandCol(rainbowColors, numColors);//glm::vec3(1.2f, 0.0f, 0.0f); // Ambient light color (gray)
-		glm::vec3 lightColorDiffuse = glm::vec3(0.8f, 0.8f, 0.8f); // Diffuse light color (white)
-		glm::vec3 lightColorSpecular = glm::vec3(1.0f, 1.0f, 1.0f); // Specular light color (white)
-
-		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorAmbient"), 1, glm::value_ptr(lightColorAmbient));
-		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorDiffuse"), 1, glm::value_ptr(lightColorDiffuse));
-		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorSpecular"), 1, glm::value_ptr(lightColorSpecular));
-
-		glm::vec3 lightPos2 = glm::vec3(-1.0f, 1.0f, 0.0f);
-		glm::vec3 lightColorAmbient2 = glm::vec3(0.2f, 1.2f, 0.2f);
-		glm::vec3 lightColorDiffuse2 = glm::vec3(0.7f, 0.7f, 0.7f);
-		glm::vec3 lightColorSpecular2 = glm::vec3(1.0f, 1.0f, 1.0f);
-
-		glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos2"), 1, glm::value_ptr(lightPos2));
-		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorAmbient2"), 1, glm::value_ptr(lightColorAmbient2));
-		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorDiffuse2"), 1, glm::value_ptr(lightColorDiffuse2));
-		glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorSpecular2"), 1, glm::value_ptr(lightColorSpecular2));
-
-		// Bind vertex array and draw
-		glBindVertexArray(VAO);
-		glDrawElements(GL_TRIANGLES, geometryIndexCount, GL_UNSIGNED_INT, 0);
+		RenderSkybox(world);
+		RenderCube(boxNormalMap, boxTexure, rainbowColors, numColors, world);
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -145,17 +118,97 @@ int main()
 	return 0;
 }
 
-void processInput(GLFWwindow*& window) {
+void RenderSkybox(glm::mat4 world) {
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
+
+	glUseProgram(skyProgram);
+
+	//Building World Matrix up
+	glUniformMatrix4fv(glGetUniformLocation(skyProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
+	glUniformMatrix4fv(glGetUniformLocation(skyProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(skyProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(skyProgram, "lightDir"), 1, glm::value_ptr(lightDir));
+	glUniform3fv(glGetUniformLocation(skyProgram, "camPos"), 1, glm::value_ptr(camPos));
+
+	// Bind vertex array and draw
+	glBindVertexArray(boxVAO);
+	glDrawElements(GL_TRIANGLES, boxIndexCount, GL_UNSIGNED_INT, 0);
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+}
+
+void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 rainbowColors[], int numColors, glm::mat4 world) {
+	//set texture channels
+	glUseProgram(shaderProgram);
+
+	//set channels world
+	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
+	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+	glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightDir));
+	glUniform3fv(glGetUniformLocation(shaderProgram, "camPos"), 1, glm::value_ptr(camPos));
+
+
+	glUniform1i(glGetUniformLocation(shaderProgram, "mainTexture"), 0);
+	glUniform1i(glGetUniformLocation(shaderProgram, "normalMap"), 1);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, boxNormalMap);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, boxTexture);
+
+	// Set lighting colors
+	glm::vec3 lightColorAmbient = getRandCol(rainbowColors, numColors);//glm::vec3(1.2f, 0.0f, 0.0f); // Ambient light color (gray)
+	glm::vec3 lightColorDiffuse = glm::vec3(0.8f, 0.8f, 0.8f); // Diffuse light color (white)
+	glm::vec3 lightColorSpecular = glm::vec3(1.0f, 1.0f, 1.0f); // Specular light color (white)
+
+	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorAmbient"), 1, glm::value_ptr(lightColorAmbient));
+	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorDiffuse"), 1, glm::value_ptr(lightColorDiffuse));
+	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorSpecular"), 1, glm::value_ptr(lightColorSpecular));
+}
+
+void processInput(GLFWwindow*& window) 
+{
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
+}
 
-	glfwSetScrollCallback(window, scroll_callback);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos) 
+{
+	float x = (float)xpos;
+	float y = (float)ypos;
+
+	if (firstMouse) {
+		lastX = x;
+		lastY = y;
+		firstMouse = false;
+	}
+
+	float dx = x - lastX;
+	float dy = y - lastY;
+	lastX = x;
+	lastY = y;
+
+	camYaw += dx;
+	camPitch = glm::clamp(camPitch - dy, -90.f , 90.f);
+	if (camYaw > 180.0f) camYaw -= 360.0f;
+	if (camYaw < -180.0f) camYaw += 360.0f;
+
+	glm::quat camQuat = glm::quat(glm::vec3(glm::radians(camPitch), glm::radians(camYaw), 0)); //big oof
+	glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
+	glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
+	view = glm::lookAt(camPos, camPos + camFor, camUp);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 	FOV -= static_cast<float>(yoffset);
+	FOV = glm::clamp(FOV, 1.0f, 120.0f);
+	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
 }
+
 
 glm::vec3 getRandCol(glm::vec3 colors[], int numColors) {
 	float time = glfwGetTime();
@@ -186,6 +239,8 @@ int init(GLFWwindow*& window) {
 	}
 
 	// Set current context
+	glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetScrollCallback(window, scroll_callback);
 	glfwMakeContextCurrent(window);
 
 	// Initialize GLAD
@@ -199,7 +254,7 @@ int init(GLFWwindow*& window) {
 	return 0;
 }
 
-void CreateGeometry(unsigned int& VAO, unsigned int &EBO ,int& size, int& numIndices)
+void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices)
 {
 	// need 24 vertices for normal/uv-mapped Cube
 	float vertices[] = {
@@ -309,7 +364,8 @@ void CreateGeometry(unsigned int& VAO, unsigned int &EBO ,int& size, int& numInd
 void CreateShaders()
 {
 	// Create shader program
-	CreateProgram(shaderProgram, "shaders/vertex.glsl", "shaders/fragment.glsl");
+	CreateProgram(shaderProgram, "shaders/vertex.vert", "shaders/fragment.vert");
+	CreateProgram(skyProgram, "shaders/skyvertex.vert", "shaders/skyfragment.vert");
 }
 
 void CreateProgram(unsigned int& programId, const char* vertex, const char* fragment) {
@@ -387,7 +443,7 @@ void loadFile(const char* fileName, char*& output)
 	}
 }
 
-unsigned int loadTexture(const char* path) 
+unsigned int loadTexture(const char* path)
 {
 	//Gen & Bind texture Id
 	unsigned int textureId;
@@ -413,7 +469,7 @@ unsigned int loadTexture(const char* path)
 	else {
 		std::cout << "Error loading texture: " << path << std::endl;
 	}
-	
+
 	//Set data
 	stbi_image_free(data);
 
