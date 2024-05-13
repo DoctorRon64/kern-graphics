@@ -17,7 +17,7 @@ void main()
     vec3 sunColor = vec3(1.0, 200 / 255.0, 50 / 255.0);
 
     vec3 viewDir = normalize(worldPos.xyz - camPos);
-    float sun = max(pow(dot(viewDir, lightDir), 64), 0.0);
+    float sun = max(pow(dot(-viewDir, lightDir), 128), 0.0);
     
     FragColor = vec4(lerp(bottomColor, topColor, abs(viewDir.y)) + sun * sunColor, 1);
 }

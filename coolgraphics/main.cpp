@@ -25,6 +25,7 @@ void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numInd
 unsigned int loadTexture(const char* path);
 void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 rainbowColors[], int numColors, glm::mat4 world);
 void RenderSkybox(glm::mat4 world);
+unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
 
 //util
 glm::vec3 getRandCol(glm::vec3 colors[], int numColors);
@@ -38,7 +39,7 @@ unsigned int shaderProgram, skyProgram;
 unsigned int screenWidth = 800;
 unsigned int screenHeight = 600;
 
-glm::vec3 lightDir = glm::vec3(-1.0f, -2.5f, -1.0f);
+glm::vec3 lightDir = glm::vec3(-0.5f, -0.5f, -0.5f);
 glm::vec3 camPos = glm::vec3(0, 2.5f, -5.0f);
 glm::mat4 view;
 glm::mat4 projection;
@@ -88,12 +89,6 @@ int main()
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
-
-		degrees += 1;
-		if (degrees > 360) {
-			degrees = 0;
-		}
-
 		// Input handling
 		processInput(window);
 
@@ -151,9 +146,9 @@ void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 ra
 	glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(shaderProgram, "camPos"), 1, glm::value_ptr(camPos));
 
-
 	glUniform1i(glGetUniformLocation(shaderProgram, "mainTexture"), 0);
 	glUniform1i(glGetUniformLocation(shaderProgram, "normalMap"), 1);
+
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, boxNormalMap);
 	glActiveTexture(GL_TEXTURE0);
@@ -167,6 +162,100 @@ void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 ra
 	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorAmbient"), 1, glm::value_ptr(lightColorAmbient));
 	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorDiffuse"), 1, glm::value_ptr(lightColorDiffuse));
 	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorSpecular"), 1, glm::value_ptr(lightColorSpecular));
+}
+
+unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID) {
+	int width, height, channels;
+	unsigned char* data = nullptr;
+	if (heightmap != nullptr) {
+		data = stbi_load(heightmap, &width, &height, &channels, comp);
+		if (data) {
+			glGenTextures(1, &heightmapID);
+			glBindTexture(GL_TEXTURE_2D, heightmapID);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
+			glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+			glGenerateMipmap(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
+	}
+
+	int stride = 8;
+	float* vertices = new float[(width * height) * stride];
+	unsigned int* indices = new unsigned int[(width - 1) * (height - 1) * 6];
+
+	int index = 0;
+	for (int i = 0; i < (width * height); i++) {
+
+		int x = i % width;
+		int z = i / width;
+
+		vertices[index++] = x * xzScale;
+		vertices[index++] = 0;
+		vertices[index++] = z * xzScale;
+		
+		vertices[index++] = 0;
+		vertices[index++] = 1;
+		vertices[index++] = 0;
+		
+		vertices[index++] = x / (float)width;
+		vertices[index++] = z / (float)height;
+	}
+
+	index = 0;
+	for (int i = 0; i < (width - 1) * (height - 1); i++) {
+		int x = i % width;
+		int z = i / width; //widht - 1
+
+		int vertex = z * width + x;
+
+		indices[index++] = vertex;
+		indices[index++] = vertex + width;
+		indices[index++] = vertex + width + 1;
+
+		indices[index++] = vertex;
+		indices[index++] = vertex + width + 1;
+		indices[index++] = vertex + 1;
+	}
+
+	unsigned int vertSize = (width * height) * stride * sizeof(float);
+	indexCount = ((width - 1) * (height - 1) * 6);
+
+	unsigned int VAO, VBO, EBO;
+	glGenVertexArrays(1, &VAO);
+	glGenBuffers(1, &VBO);
+	glGenBuffers(1, &EBO);
+
+	glBindVertexArray(VAO);
+
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, vertSize, vertices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexCount * sizeof(unsigned int), indices, GL_STATIC_DRAW);
+
+	// vertex information!
+	// position
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * stride, 0);
+	glEnableVertexAttribArray(0);
+	// normal
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * stride, (void*)(sizeof(float) * 3));
+	glEnableVertexAttribArray(1);
+	// uv
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(float) * stride, (void*)(sizeof(float) * 6));
+	glEnableVertexAttribArray(2);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	glBindVertexArray(0);
+
+	delete[] vertices;
+	delete[] indices;
+
+	stbi_image_free(data);
+
+	return VAO;
 }
 
 void processInput(GLFWwindow*& window) 
@@ -193,7 +282,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	lastY = y;
 
 	camYaw += dx;
-	camPitch = glm::clamp(camPitch - dy, -90.f , 90.f);
+	camPitch = glm::clamp(camPitch + dy, -90.f , 90.f);
 	if (camYaw > 180.0f) camYaw -= 360.0f;
 	if (camYaw < -180.0f) camYaw += 360.0f;
 
@@ -205,10 +294,9 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 	FOV -= static_cast<float>(yoffset);
-	FOV = glm::clamp(FOV, 1.0f, 120.0f);
+	FOV = glm::clamp(FOV, 1.0f, 180.0f);
 	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
 }
-
 
 glm::vec3 getRandCol(glm::vec3 colors[], int numColors) {
 	float time = glfwGetTime();
