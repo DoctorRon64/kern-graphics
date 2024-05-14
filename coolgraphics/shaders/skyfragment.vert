@@ -5,6 +5,7 @@ in vec4 worldPos;
 
 uniform vec3 lightDir;
 uniform vec3 camPos;
+uniform vec3 sunColor;
 
 vec3 lerp(vec3 a, vec3 b, float t) {
     return a + (b - a) * t;
