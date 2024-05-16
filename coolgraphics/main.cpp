@@ -16,9 +16,9 @@
 
 //Forward Declarations
 void processInput(GLFWwindow*& window);
-int init(GLFWwindow*& window);
+int init(GLFWwindow*& window, int width, int height);
 
-//Create Stuff
+//Create Stuffa
 void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
@@ -34,12 +34,16 @@ void scroll_callback(GLFWwindow* window, double xpos, double ypos);
 void loadFile(const char* fileName, char*& output);
 void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 
+/////////////////////////////////////////////////////////////////////////
+//Variables
+/////////////////////////////////////////////////////////////////////////
+
 // Program ID
 unsigned int shaderProgram, skyProgram;
-unsigned int screenWidth = 800;
-unsigned int screenHeight = 600;
+unsigned int screenWidth = 1200;
+unsigned int screenHeight = 800;
 
-glm::vec3 lightDir = glm::vec3(-0.5f, -0.5f, -0.5f);
+glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
 glm::vec3 camPos = glm::vec3(0, 2.5f, -5.0f);
 glm::mat4 view;
 glm::mat4 projection;
@@ -58,7 +62,7 @@ float camYaw, camPitch;
 int main()
 {
 	GLFWwindow* window;
-	int setup = init(window);
+	int setup = init(window, screenWidth, screenHeight);
 	if (setup != 0) return setup;
 
 	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
@@ -93,7 +97,7 @@ int main()
 		processInput(window);
 
 		// Rendering
-		glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
+		glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		glm::mat4 world = glm::mat4(1.0f);
@@ -258,12 +262,31 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 	return VAO;
 }
 
-void processInput(GLFWwindow*& window) 
+void processInput(GLFWwindow*& window)
 {
+	// Movement speed
+	float speed = 0.0005f;
+
+	// Check key presses for WASD movement
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+		camPos += speed * glm::normalize(glm::vec3(view[0])); // Move forward
+	}
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+		camPos -= speed * glm::normalize(glm::vec3(view[0])); // Move backward
+	}
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+		camPos -= speed * glm::normalize(glm::cross(glm::vec3(view[0]), glm::vec3(view[1]))); // Move left
+	}
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+		camPos += speed * glm::normalize(glm::cross(glm::vec3(view[0]), glm::vec3(view[1]))); // Move right
+	}
+
+	// Exit the application if ESC key is pressed
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
 }
+
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) 
 {
@@ -281,7 +304,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	lastX = x;
 	lastY = y;
 
-	camYaw += dx;
+	camYaw -= dx;
 	camPitch = glm::clamp(camPitch + dy, -90.f , 90.f);
 	if (camYaw > 180.0f) camYaw -= 360.0f;
 	if (camYaw < -180.0f) camYaw += 360.0f;
@@ -294,7 +317,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 	FOV -= static_cast<float>(yoffset);
-	FOV = glm::clamp(FOV, 1.0f, 180.0f);
+	FOV = glm::clamp(FOV, 1.0f, 90.0f);
 	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
 }
 
@@ -309,7 +332,7 @@ glm::vec3 getRandCol(glm::vec3 colors[], int numColors) {
 	return interpolatedColor;
 }
 
-int init(GLFWwindow*& window) {
+int init(GLFWwindow*& window, int width, int height) {
 
 	// Initialize GLFW
 	glfwInit();
@@ -318,7 +341,7 @@ int init(GLFWwindow*& window) {
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// Create main window
-	window = glfwCreateWindow(800, 600, "My Cool Shaders", NULL, NULL);
+	window = glfwCreateWindow(width, height, "My Cool Shaders", NULL, NULL);
 	if (window == NULL)
 	{
 		std::cout << "Failed to create GLFW window" << std::endl;
