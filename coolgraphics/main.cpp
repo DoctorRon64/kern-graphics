@@ -23,13 +23,15 @@ void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path);
-void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 rainbowColors[], int numColors, glm::mat4 world);
+void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::mat4 world);
 void RenderSkybox(glm::mat4 world);
+void RenderTerrain(glm::mat4 world);
 unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
 
 //util
-glm::vec3 getRandCol(glm::vec3 colors[], int numColors);
+glm::vec3 getRandCol();
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void scroll_callback(GLFWwindow* window, double xpos, double ypos);
 void loadFile(const char* fileName, char*& output);
 void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
@@ -39,12 +41,12 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 /////////////////////////////////////////////////////////////////////////
 
 // Program ID
-unsigned int shaderProgram, skyProgram;
+unsigned int shaderProgram, skyProgram, terrainProgram;
 unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
-glm::vec3 camPos = glm::vec3(0, 2.5f, -5.0f);
+glm::vec3 camPos = glm::vec3(100.0f, 12.5f, -5.0f);
 glm::mat4 view;
 glm::mat4 projection;
 
@@ -58,6 +60,11 @@ glm::vec3 boxTrans = glm::vec3(0.0f, 0.0f, 0.0f);
 float lastX, lastY;
 bool firstMouse = true;
 float camYaw, camPitch;
+glm::quat camQuat = glm::quat(glm::vec3(glm::radians(camPitch), glm::radians(camYaw), 0));
+bool keys[1024];
+
+//Terrain Data
+unsigned int terrainVAO, terrainIndexCount, HeightMapId;
 
 int main()
 {
@@ -65,10 +72,8 @@ int main()
 	int setup = init(window, screenWidth, screenHeight);
 	if (setup != 0) return setup;
 
-	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
 	CreateShaders();
-
-	glEnable(GL_CULL_FACE);
+	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
 
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
@@ -76,38 +81,29 @@ int main()
 	//Matrices!
 	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
 	unsigned int boxNormalMap = loadTexture("textures/cardbox_normal.png");
-
-	// Usage
-	glm::vec3 rainbowColors[] = {
-		glm::vec3(1.0f, 0.0f, 0.0f),   // Red
-		glm::vec3(1.0f, 0.5f, 0.0f),   // Orange
-		glm::vec3(1.0f, 1.0f, 0.0f),   // Yellow
-		glm::vec3(0.0f, 1.0f, 0.0f),   // Green
-		glm::vec3(0.0f, 0.0f, 1.0f),   // Blue
-		glm::vec3(0.75f, 0.0f, 0.75f)  // Purple
-	};
-	int numColors = sizeof(rainbowColors) / sizeof(rainbowColors[0]);
+	terrainVAO = GeneratePlane("textures/heightmap.jpg", GL_RGBA, 4, 100.0f, 5.0f, terrainIndexCount, HeightMapId);
 
 	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
+	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 1000.0f);
+
+	glm::mat4 world = glm::mat4(1.0f);
+	world = glm::translate(world, camPos);
+	world = glm::scale(world, boxTransformSize);
+	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
 		// Input handling
 		processInput(window);
 
+		RenderSkybox(world);
+		RenderTerrain(world);
+		RenderCube(boxNormalMap, boxTexure, world);
+
+
 		// Rendering
 		glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
-
-		glm::mat4 world = glm::mat4(1.0f);
-		world = glm::translate(world, camPos);
-		world = glm::scale(world, boxTransformSize);
-		world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
-
-		// Activate the shader program
-		RenderSkybox(world);
-		RenderCube(boxNormalMap, boxTexure, rainbowColors, numColors, world);
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -119,7 +115,7 @@ int main()
 
 void RenderSkybox(glm::mat4 world) {
 	glDisable(GL_CULL_FACE);
-	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_DEPTH);
 
 	glUseProgram(skyProgram);
 
@@ -127,6 +123,7 @@ void RenderSkybox(glm::mat4 world) {
 	glUniformMatrix4fv(glGetUniformLocation(skyProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 	glUniformMatrix4fv(glGetUniformLocation(skyProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv(glGetUniformLocation(skyProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
 	glUniform3fv(glGetUniformLocation(skyProgram, "lightDir"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(skyProgram, "camPos"), 1, glm::value_ptr(camPos));
 
@@ -135,10 +132,37 @@ void RenderSkybox(glm::mat4 world) {
 	glDrawElements(GL_TRIANGLES, boxIndexCount, GL_UNSIGNED_INT, 0);
 
 	glEnable(GL_CULL_FACE);
-	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_DEPTH);
 }
 
-void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 rainbowColors[], int numColors, glm::mat4 world) {
+void RenderTerrain(glm::mat4 world) {
+	glEnable(GL_DEPTH);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+
+	glUseProgram(terrainProgram);
+
+	glm::mat4 world2 = glm::mat4(1.0);
+
+	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
+	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+	glUniform3fv(glGetUniformLocation(terrainProgram, "lightDir"), 1, glm::value_ptr(lightDir));
+	glUniform3fv(glGetUniformLocation(terrainProgram, "camPos"), 1, glm::value_ptr(camPos));
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, HeightMapId);
+
+	// Bind vertex array and draw
+	glBindVertexArray(terrainVAO);
+	glDrawElements(GL_TRIANGLES, terrainIndexCount, GL_UNSIGNED_INT, 0);
+
+	glDisable(GL_DEPTH);
+	glDisable(GL_CULL_FACE);
+}
+
+void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::mat4 world) {
 	//set texture channels
 	glUseProgram(shaderProgram);
 
@@ -147,7 +171,7 @@ void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 ra
 	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
-	glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightDir));
+	glUniform3fv(glGetUniformLocation(shaderProgram, "lightDir"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(shaderProgram, "camPos"), 1, glm::value_ptr(camPos));
 
 	glUniform1i(glGetUniformLocation(shaderProgram, "mainTexture"), 0);
@@ -157,15 +181,6 @@ void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::vec3 ra
 	glBindTexture(GL_TEXTURE_2D, boxNormalMap);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, boxTexture);
-
-	// Set lighting colors
-	glm::vec3 lightColorAmbient = getRandCol(rainbowColors, numColors);//glm::vec3(1.2f, 0.0f, 0.0f); // Ambient light color (gray)
-	glm::vec3 lightColorDiffuse = glm::vec3(0.8f, 0.8f, 0.8f); // Diffuse light color (white)
-	glm::vec3 lightColorSpecular = glm::vec3(1.0f, 1.0f, 1.0f); // Specular light color (white)
-
-	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorAmbient"), 1, glm::value_ptr(lightColorAmbient));
-	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorDiffuse"), 1, glm::value_ptr(lightColorDiffuse));
-	glUniform3fv(glGetUniformLocation(shaderProgram, "lightColorSpecular"), 1, glm::value_ptr(lightColorSpecular));
 }
 
 unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID) {
@@ -210,8 +225,8 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 
 	index = 0;
 	for (int i = 0; i < (width - 1) * (height - 1); i++) {
-		int x = i % width;
-		int z = i / width; //widht - 1
+		int x = i % (width - 1);
+		int z = i / (width - 1); //widht - 1
 
 		int vertex = z * width + x;
 
@@ -264,105 +279,35 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 
 void processInput(GLFWwindow*& window)
 {
-	// Movement speed
-	float speed = 0.0005f;
-
-	// Check key presses for WASD movement
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-		camPos += speed * glm::normalize(glm::vec3(view[0])); // Move forward
-	}
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-		camPos -= speed * glm::normalize(glm::vec3(view[0])); // Move backward
-	}
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-		camPos -= speed * glm::normalize(glm::cross(glm::vec3(view[0]), glm::vec3(view[1]))); // Move left
-	}
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-		camPos += speed * glm::normalize(glm::cross(glm::vec3(view[0]), glm::vec3(view[1]))); // Move right
-	}
-
 	// Exit the application if ESC key is pressed
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
-}
 
+	bool camChanged = false;
 
-void mouse_callback(GLFWwindow* window, double xpos, double ypos) 
-{
-	float x = (float)xpos;
-	float y = (float)ypos;
-
-	if (firstMouse) {
-		lastX = x;
-		lastY = y;
-		firstMouse = false;
+	if (keys[GLFW_KEY_W]) {
+		camPos += camQuat * glm::vec3(0, 0, 1);
+		camChanged = true;
+	}
+	if (keys[GLFW_KEY_S]) {
+		camPos += camQuat * glm::vec3(0, 0, -1);
+		camChanged = true;
+	}
+	if (keys[GLFW_KEY_A]) {
+		camPos += camQuat * glm::vec3(1, 0, 0);
+		camChanged = true;
+	}
+	if (keys[GLFW_KEY_D]) {
+		camPos += camQuat * glm::vec3(-1, 0, 0);
+		camChanged = true;
 	}
 
-	float dx = x - lastX;
-	float dy = y - lastY;
-	lastX = x;
-	lastY = y;
-
-	camYaw -= dx;
-	camPitch = glm::clamp(camPitch + dy, -90.f , 90.f);
-	if (camYaw > 180.0f) camYaw -= 360.0f;
-	if (camYaw < -180.0f) camYaw += 360.0f;
-
-	glm::quat camQuat = glm::quat(glm::vec3(glm::radians(camPitch), glm::radians(camYaw), 0)); //big oof
-	glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
-	glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
-	view = glm::lookAt(camPos, camPos + camFor, camUp);
-}
-
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-	FOV -= static_cast<float>(yoffset);
-	FOV = glm::clamp(FOV, 1.0f, 90.0f);
-	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
-}
-
-glm::vec3 getRandCol(glm::vec3 colors[], int numColors) {
-	float time = glfwGetTime();
-	float colorIndex = fmod(time, numColors);
-	int colorIndex1 = static_cast<int>(colorIndex) % numColors;
-	int colorIndex2 = (colorIndex1 + 1) % numColors;
-	float factor = colorIndex - floor(colorIndex);
-	glm::vec3 interpolatedColor = glm::mix(colors[colorIndex1], colors[colorIndex2], factor);
-
-	return interpolatedColor;
-}
-
-int init(GLFWwindow*& window, int width, int height) {
-
-	// Initialize GLFW
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-	// Create main window
-	window = glfwCreateWindow(width, height, "My Cool Shaders", NULL, NULL);
-	if (window == NULL)
-	{
-		std::cout << "Failed to create GLFW window" << std::endl;
-		glfwTerminate();
-		return -1;
+	if (camChanged) {
+		glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
+		glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
+		view = glm::lookAt(camPos, camPos + camFor, camUp);
 	}
-
-	// Set current context
-	glfwSetCursorPosCallback(window, mouse_callback);
-	glfwSetScrollCallback(window, scroll_callback);
-	glfwMakeContextCurrent(window);
-
-	// Initialize GLAD
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-	{
-		std::cout << "Failed to initialize GLAD" << std::endl;
-		glfwTerminate();
-		return -2;
-	}
-
-	return 0;
 }
 
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices)
@@ -475,8 +420,9 @@ void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numInd
 void CreateShaders()
 {
 	// Create shader program
-	CreateProgram(shaderProgram, "shaders/vertex.vert", "shaders/fragment.vert");
-	CreateProgram(skyProgram, "shaders/skyvertex.vert", "shaders/skyfragment.vert");
+	CreateProgram(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
+	CreateProgram(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
+	CreateProgram(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
 }
 
 void CreateProgram(unsigned int& programId, const char* vertex, const char* fragment) {
@@ -526,6 +472,101 @@ void CreateProgram(unsigned int& programId, const char* vertex, const char* frag
 	// Free allocated memory for shader source code
 	delete vertexSrc;
 	delete fragmentSrc;
+}
+
+int init(GLFWwindow*& window, int width, int height) {
+
+	// Initialize GLFW
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+	// Create main window
+	window = glfwCreateWindow(width, height, "My Cool Shaders", NULL, NULL);
+	if (window == NULL)
+	{
+		std::cout << "Failed to create GLFW window" << std::endl;
+		glfwTerminate();
+		return -1;
+	}
+
+	// Set current context
+	glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetScrollCallback(window, scroll_callback);
+	glfwSetKeyCallback(window, key_callback);
+	glfwMakeContextCurrent(window);
+
+	// Initialize GLAD
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		std::cout << "Failed to initialize GLAD" << std::endl;
+		glfwTerminate();
+		return -2;
+	}
+
+	return 0;
+}
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+	float x = (float)xpos;
+	float y = (float)ypos;
+
+	if (firstMouse) {
+		lastX = x;
+		lastY = y;
+		firstMouse = false;
+	}
+
+	float dx = x - lastX;
+	float dy = y - lastY;
+	lastX = x;
+	lastY = y;
+
+	camYaw -= dx;
+	camPitch = glm::clamp(camPitch + dy, -90.f, 90.f);
+	if (camYaw > 180.0f) camYaw -= 360.0f;
+	if (camYaw < -180.0f) camYaw += 360.0f;
+
+	camQuat = glm::quat(glm::vec3(glm::radians(camPitch), glm::radians(camYaw), 0)); //big oof
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+	FOV -= static_cast<float>(yoffset);
+	FOV = glm::clamp(FOV, 1.0f, 90.0f);
+	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
+}
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) 
+{
+	if (action == GLFW_PRESS) {
+		keys[key] = true;
+	}
+	else if (action == GLFW_RELEASE) {
+		keys[key] = false;
+	}
+}
+
+glm::vec3 getRandCol() {
+	// Usage
+	glm::vec3 rainbowColors[] = {
+		glm::vec3(1.0f, 0.0f, 0.0f),   // Red
+		glm::vec3(1.0f, 0.5f, 0.0f),   // Orange
+		glm::vec3(1.0f, 1.0f, 0.0f),   // Yellow
+		glm::vec3(0.0f, 1.0f, 0.0f),   // Green
+		glm::vec3(0.0f, 0.0f, 1.0f),   // Blue
+		glm::vec3(0.75f, 0.0f, 0.75f)  // Purple
+	};
+	int numColors = sizeof(rainbowColors) / sizeof(rainbowColors[0]);
+
+	double time = glfwGetTime();
+	double colorIndex = fmod(time, numColors);
+	int colorIndex1 = static_cast<int>(colorIndex) % numColors;
+	int colorIndex2 = (colorIndex1 + 1) % numColors;
+	double factor = colorIndex - floor(colorIndex);
+	glm::vec3 interpolatedColor = glm::mix(rainbowColors[colorIndex1], rainbowColors[colorIndex2], factor);
+	return interpolatedColor;
 }
 
 void InfoShaderLog(unsigned int shaderId, int success, char* infoLog) {
