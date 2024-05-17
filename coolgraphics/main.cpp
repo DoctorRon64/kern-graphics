@@ -18,14 +18,14 @@
 void processInput(GLFWwindow*& window);
 int init(GLFWwindow*& window, int width, int height);
 
-//Create Stuffa
+//Create Stuff
 void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path);
-void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::mat4 world);
-void RenderSkybox(glm::mat4 world);
-void RenderTerrain(glm::mat4 world);
+void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture);
+void RenderSkybox();
+void RenderTerrain();
 unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
 
 //util
@@ -46,19 +46,16 @@ unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
-glm::vec3 camPos = glm::vec3(100.0f, 12.5f, -5.0f);
+glm::vec3 camPos = glm::vec3(100, 120.5f, -5.0f);
 glm::mat4 view;
 glm::mat4 projection;
 
 unsigned int boxVAO, boxEBO;
 int boxSize, boxIndexCount;
-static float FOV = 80.0f;
-float degrees = 45.0f;
-glm::vec3 boxTransformSize = glm::vec3(1.0f, 1.0f, 1.0f);
-glm::vec3 boxTrans = glm::vec3(0.0f, 0.0f, 0.0f);
+static float FOV = 45.0f;
 
-float lastX, lastY;
 bool firstMouse = true;
+float lastX, lastY;
 float camYaw, camPitch;
 glm::quat camQuat = glm::quat(glm::vec3(glm::radians(camPitch), glm::radians(camYaw), 0));
 bool keys[1024];
@@ -72,11 +69,11 @@ int main()
 	int setup = init(window, screenWidth, screenHeight);
 	if (setup != 0) return setup;
 
-	CreateShaders();
-	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
-
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
+
+	CreateShaders();
+	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
 
 	//Matrices!
 	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
@@ -86,24 +83,17 @@ int main()
 	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 1000.0f);
 
-	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::translate(world, camPos);
-	world = glm::scale(world, boxTransformSize);
-	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
-
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
-		// Input handling
 		processInput(window);
-
-		RenderSkybox(world);
-		RenderTerrain(world);
-		RenderCube(boxNormalMap, boxTexure, world);
-
-
+		
 		// Rendering
 		glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
+
+		RenderCube(boxNormalMap, boxTexure);
+		RenderSkybox();
+		RenderTerrain();
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -113,11 +103,15 @@ int main()
 	return 0;
 }
 
-void RenderSkybox(glm::mat4 world) {
+void RenderSkybox() {
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH);
 
 	glUseProgram(skyProgram);
+
+	glm::vec3 size = glm::vec3(.5, .5, .5);
+	glm::mat4 world = glm::mat4(1.0f);
+	world = glm::scale(world, size);
 
 	//Building World Matrix up
 	glUniformMatrix4fv(glGetUniformLocation(skyProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
@@ -135,19 +129,18 @@ void RenderSkybox(glm::mat4 world) {
 	glEnable(GL_DEPTH);
 }
 
-void RenderTerrain(glm::mat4 world) {
+void RenderTerrain() {
 	glEnable(GL_DEPTH);
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 
 	glUseProgram(terrainProgram);
 
-	glm::mat4 world2 = glm::mat4(1.0);
+	glm::mat4 world = glm::mat4(1.0f);
 
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
 	glUniform3fv(glGetUniformLocation(terrainProgram, "lightDir"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(terrainProgram, "camPos"), 1, glm::value_ptr(camPos));
 
@@ -162,9 +155,19 @@ void RenderTerrain(glm::mat4 world) {
 	glDisable(GL_CULL_FACE);
 }
 
-void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::mat4 world) {
+void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture) {
 	//set texture channels
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
+
 	glUseProgram(shaderProgram);
+
+	glm::vec3 size = glm::vec3(0, 0, 0);
+	float degrees = 0;
+	glm::mat4 world = glm::mat4(1.0f);
+	world = glm::translate(world, camPos);
+	world = glm::scale(world, size);
+	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
 
 	//set channels world
 	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
@@ -181,11 +184,14 @@ void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture, glm::mat4 wo
 	glBindTexture(GL_TEXTURE_2D, boxNormalMap);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, boxTexture);
+
+	glDisable(GL_CULL_FACE);
 }
 
 unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID) {
-	int width, height, channels;
+	int width = 0, height = 0 , channels = 0;
 	unsigned char* data = nullptr;
+
 	if (heightmap != nullptr) {
 		data = stbi_load(heightmap, &width, &height, &channels, comp);
 		if (data) {
@@ -199,10 +205,20 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 			glGenerateMipmap(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
+		else {
+			std::cerr << "Failed to load heightmap: " << stbi_failure_reason() << std::endl;
+			return 0;
+		}
+	}
+	else {
+		std::cerr << "Heightmap is null." << std::endl;
+		return 0;
 	}
 
+
 	int stride = 8;
-	float* vertices = new float[(width * height) * stride];
+	size_t wtimesh = static_cast<size_t>(width) * static_cast<size_t>(height);
+	float* vertices = new float[wtimesh * stride];
 	unsigned int* indices = new unsigned int[(width - 1) * (height - 1) * 6];
 
 	int index = 0;
@@ -211,16 +227,16 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 		int x = i % width;
 		int z = i / width;
 
-		vertices[index++] = x * xzScale;
+		vertices[index++] = static_cast<float>(x) * xzScale;
 		vertices[index++] = 0;
-		vertices[index++] = z * xzScale;
+		vertices[index++] = static_cast<float>(z) * xzScale;
 		
 		vertices[index++] = 0;
 		vertices[index++] = 1;
 		vertices[index++] = 0;
 		
-		vertices[index++] = x / (float)width;
-		vertices[index++] = z / (float)height;
+		vertices[index++] = static_cast<float>(x) / (float)width;
+		vertices[index++] = static_cast<float>(z) / (float)height;
 	}
 
 	index = 0;
@@ -240,7 +256,7 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 	}
 
 	unsigned int vertSize = (width * height) * stride * sizeof(float);
-	indexCount = ((width - 1) * (height - 1) * 6);
+	indexCount = static_cast<unsigned int>((width - 1) * (height - 1) * 6);
 
 	unsigned int VAO, VBO, EBO;
 	glGenVertexArrays(1, &VAO);
@@ -275,39 +291,6 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 	stbi_image_free(data);
 
 	return VAO;
-}
-
-void processInput(GLFWwindow*& window)
-{
-	// Exit the application if ESC key is pressed
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-		glfwSetWindowShouldClose(window, true);
-	}
-
-	bool camChanged = false;
-
-	if (keys[GLFW_KEY_W]) {
-		camPos += camQuat * glm::vec3(0, 0, 1);
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_S]) {
-		camPos += camQuat * glm::vec3(0, 0, -1);
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_A]) {
-		camPos += camQuat * glm::vec3(1, 0, 0);
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_D]) {
-		camPos += camQuat * glm::vec3(-1, 0, 0);
-		camChanged = true;
-	}
-
-	if (camChanged) {
-		glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
-		glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
-		view = glm::lookAt(camPos, camPos + camFor, camUp);
-	}
 }
 
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices)
@@ -420,9 +403,9 @@ void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numInd
 void CreateShaders()
 {
 	// Create shader program
-	CreateProgram(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
-	CreateProgram(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
-	CreateProgram(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
+	CreateProgram(shaderProgram, "shaders/defaultvertex.vert", "shaders/defaultfragment.vert");
+	CreateProgram(skyProgram, "shaders/skyvertex.vert", "shaders/skyfrag.vert");
+	CreateProgram(terrainProgram, "shaders/terrainvertex.vert", "shaders/terrainfrag.vert");
 }
 
 void CreateProgram(unsigned int& programId, const char* vertex, const char* fragment) {
@@ -508,6 +491,39 @@ int init(GLFWwindow*& window, int width, int height) {
 	return 0;
 }
 
+void processInput(GLFWwindow*& window)
+{
+	// Exit the application if ESC key is pressed
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+		glfwSetWindowShouldClose(window, true);
+	}
+
+	bool camChanged = false;
+
+	if (keys[GLFW_KEY_W]) {
+		camPos += camQuat * glm::vec3(0, 0, 1);
+		camChanged = true;
+	}
+	if (keys[GLFW_KEY_S]) {
+		camPos += camQuat * glm::vec3(0, 0, -1);
+		camChanged = true;
+	}
+	if (keys[GLFW_KEY_A]) {
+		camPos += camQuat * glm::vec3(1, 0, 0);
+		camChanged = true;
+	}
+	if (keys[GLFW_KEY_D]) {
+		camPos += camQuat * glm::vec3(-1, 0, 0);
+		camChanged = true;
+	}
+
+	if (camChanged) {
+		glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
+		glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
+		view = glm::lookAt(camPos, camPos + camFor, camUp);
+	}
+}
+
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
 	float x = (float)xpos;
@@ -530,6 +546,10 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	if (camYaw < -180.0f) camYaw += 360.0f;
 
 	camQuat = glm::quat(glm::vec3(glm::radians(camPitch), glm::radians(camYaw), 0)); //big oof
+
+	glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
+	glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
+	view = glm::lookAt(camPos, camPos + camFor, camUp);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
