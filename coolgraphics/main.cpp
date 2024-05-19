@@ -46,7 +46,7 @@ unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
-glm::vec3 camPos = glm::vec3(100, 120.5f, -5.0f);
+glm::vec3 camPos = glm::vec3(500, 500.0f, 500.0f);
 glm::mat4 view;
 glm::mat4 projection;
 
@@ -81,7 +81,7 @@ int main()
 	terrainVAO = GeneratePlane("textures/heightmap.jpg", GL_RGBA, 4, 100.0f, 5.0f, terrainIndexCount, HeightMapId);
 
 	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 1000.0f);
+	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 5000.0f);
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -89,7 +89,7 @@ int main()
 		
 		// Rendering
 		glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		RenderCube(boxNormalMap, boxTexure);
 		RenderSkybox();
@@ -105,13 +105,14 @@ int main()
 
 void RenderSkybox() {
 	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_DEPTH);
 
 	glUseProgram(skyProgram);
 
-	glm::vec3 size = glm::vec3(.5, .5, .5);
 	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::scale(world, size);
+	world = glm::translate(world, camPos);
+	world = glm::scale(world, glm::vec3(100, 100, 100));
 
 	//Building World Matrix up
 	glUniformMatrix4fv(glGetUniformLocation(skyProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
@@ -131,6 +132,7 @@ void RenderSkybox() {
 
 void RenderTerrain() {
 	glEnable(GL_DEPTH);
+	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 
@@ -141,11 +143,13 @@ void RenderTerrain() {
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
 	glUniform3fv(glGetUniformLocation(terrainProgram, "lightDir"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(terrainProgram, "camPos"), 1, glm::value_ptr(camPos));
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, HeightMapId);
+	glUniform1i(glGetUniformLocation(terrainProgram, "mainTexture"), 0);
 
 	// Bind vertex array and draw
 	glBindVertexArray(terrainVAO);
@@ -218,7 +222,7 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 
 	int stride = 8;
 	size_t wtimesh = static_cast<size_t>(width) * static_cast<size_t>(height);
-	float* vertices = new float[wtimesh * stride];
+	float* vertices = new float[(width * height) * stride];
 	unsigned int* indices = new unsigned int[(width - 1) * (height - 1) * 6];
 
 	int index = 0;
@@ -498,22 +502,26 @@ void processInput(GLFWwindow*& window)
 		glfwSetWindowShouldClose(window, true);
 	}
 
+	// Movement speed multiplier
+																	//sprinting - walking
+	float speed = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 3.0f : 1.0f;
+
 	bool camChanged = false;
 
 	if (keys[GLFW_KEY_W]) {
-		camPos += camQuat * glm::vec3(0, 0, 1);
+		camPos += camQuat * glm::vec3(0, 0, 1) * speed;
 		camChanged = true;
 	}
 	if (keys[GLFW_KEY_S]) {
-		camPos += camQuat * glm::vec3(0, 0, -1);
+		camPos += camQuat * glm::vec3(0, 0, -1) * speed;
 		camChanged = true;
 	}
 	if (keys[GLFW_KEY_A]) {
-		camPos += camQuat * glm::vec3(1, 0, 0);
+		camPos += camQuat * glm::vec3(1, 0, 0) * speed;
 		camChanged = true;
 	}
 	if (keys[GLFW_KEY_D]) {
-		camPos += camQuat * glm::vec3(-1, 0, 0);
+		camPos += camQuat * glm::vec3(-1, 0, 0) * speed;
 		camChanged = true;
 	}
 
