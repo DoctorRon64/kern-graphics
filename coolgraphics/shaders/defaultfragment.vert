@@ -22,10 +22,9 @@ void main()
     normal = tbn * normal;
 
     // Lighting calculations for the first light source
-    vec3 lightDir2 = normalize(lightDir - worldPos.xyz);
     vec3 viewDir = normalize(camPos - worldPos.xyz);
-    vec3 reflDir = reflect(-lightDir2, normal);
-    float lightValue = max(dot(normal, lightDir2), 0.0);
+    vec3 reflDir = reflect(-lightDir, normal);
+    float lightValue = max(dot(normal, lightDir), 0.0);
     float spec = pow(max(dot(reflDir, viewDir), 0.0), 8);
 
     vec3 ambient = texture(mainTexture, uv).rgb;

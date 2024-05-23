@@ -32,7 +32,6 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 glm::vec3 getRandCol();
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-void scroll_callback(GLFWwindow* window, double xpos, double ypos);
 void loadFile(const char* fileName, char*& output);
 void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 
@@ -46,7 +45,7 @@ unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
-glm::vec3 camPos = glm::vec3(500, 500.0f, 500.0f);
+glm::vec3 camPos = glm::vec3(0.0f, 0.0f, 0.0f);
 glm::mat4 view;
 glm::mat4 projection;
 
@@ -73,11 +72,11 @@ int main()
 	glViewport(0, 0, screenWidth, screenHeight);
 
 	CreateShaders();
-	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
 
-	//Matrices!
+	//texture geometry stuff
 	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
 	unsigned int boxNormalMap = loadTexture("textures/cardbox_normal.png");
+	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
 	terrainVAO = GeneratePlane("textures/heightmap.jpg", GL_RGBA, 4, 100.0f, 5.0f, terrainIndexCount, HeightMapId);
 
 	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
@@ -166,12 +165,14 @@ void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture) {
 
 	glUseProgram(shaderProgram);
 
-	glm::vec3 size = glm::vec3(0, 0, 0);
-	float degrees = 0;
+	glm::vec3 size = glm::vec3(100, 100, 100);
+	glm::vec3 position = glm::vec3(0, 0, 0);
 	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::translate(world, camPos);
-	world = glm::scale(world, size);
+	float degrees = 0;
+
+	world = glm::translate(world, position);
 	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
+	world = glm::scale(world, size);
 
 	//set channels world
 	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
@@ -480,7 +481,6 @@ int init(GLFWwindow*& window, int width, int height) {
 
 	// Set current context
 	glfwSetCursorPosCallback(window, mouse_callback);
-	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetKeyCallback(window, key_callback);
 	glfwMakeContextCurrent(window);
 
@@ -558,12 +558,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
 	glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
 	view = glm::lookAt(camPos, camPos + camFor, camUp);
-}
-
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-	FOV -= static_cast<float>(yoffset);
-	FOV = glm::clamp(FOV, 1.0f, 90.0f);
-	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) 
