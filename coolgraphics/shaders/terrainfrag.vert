@@ -17,6 +17,10 @@ vec3 lerp(vec3 a, vec3 b, float t) {
     return a + (b - a) * t;
 }
 
+vec2 lerp(vec2 a, vec2 b, float t) {
+    return a + (b - a) * t;
+}
+
 void main()
 {
     // Normal Map
@@ -27,7 +31,7 @@ void main()
     normal.b = -normal.b;
 
     // Lighting calculations for the first light source
-    //vec3 viewDir = normalize(camPos - worldPos.xyz);
+    vec3 viewDir = normalize(camPos - worldPos.xyz);
     //vec3 reflDir = reflect(-lightDir, normal);
 
     float lightValue = max(-dot(normal, lightDir), 0.0);
@@ -37,8 +41,7 @@ void main()
     float y = worldPos.y;
 
     float dist = length(worldPos.xyz - camPos);
-    //blend 250
-    float uvLerp = clamp((dist - 250) / 159, -1, 1) * .5 + .5;
+    float uvLerp = clamp((dist - 250 /* 250 */) / 159, -1, 1) * .5 + .5;
 
     //height 50 and widht 10
     float ds = clamp((y-10) / 10, -1, 1) * .5 + .5;
@@ -65,9 +68,15 @@ void main()
     vec3 snowColor = lerp(snowColorClose, snowColorFar, uvLerp);
 
     vec3 diffuse = lerp(lerp(lerp(lerp(dirtColor, sandColor, ds), grassColor, sg), rockColor, gr), snowColor, rs);
+    
+    //fog
+    float fog = pow(clamp((dist - 250) / 1500, 0, 1), 2);
+    vec3 topColor = vec3(68.0 / 255.0, 118.0 / 255.0 , 189.0 / 255.0);
+    vec3 bottomColor = vec3(188.0 / 255.0,  214.0 / 255.0, 231.0 / 255.0);
+    vec3 fogColor = lerp(bottomColor, topColor, max(viewDir.y, 0.0));
 
     // Final Color Calculation
-    vec4 outputCol = vec4(diffuse * min(lightValue + 0.1, 1.0), 1.0);// + spec * outputColor.rgb;
+    vec4 outputCol = vec4(lerp(diffuse * min(lightValue + 0.1, 1.0), fogColor, fog) ,1.0);// + spec * outputColor.rgb;
 
     FragColor = outputCol;
 }

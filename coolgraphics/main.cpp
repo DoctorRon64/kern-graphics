@@ -45,7 +45,7 @@ unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
-glm::vec3 camPos = glm::vec3(500.0f, 500.0f, 500.0f);
+glm::vec3 camPos = glm::vec3(0, 0, 0);
 glm::mat4 view;
 glm::mat4 projection;
 
@@ -200,7 +200,7 @@ void RenderCube() {
 
 	glUseProgram(shaderProgram);
 
-	glm::vec3 size = glm::vec3(10, 10, 10);
+	glm::vec3 size = glm::vec3(10.0f, 10.0f, 10.0f);
 	glm::vec3 position = glm::vec3(0, 0, 0);
 	glm::mat4 world = glm::mat4(1.0f);
 	float degrees = 0;
