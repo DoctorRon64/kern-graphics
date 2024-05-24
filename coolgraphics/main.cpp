@@ -22,11 +22,11 @@ int init(GLFWwindow*& window, int width, int height);
 void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
-unsigned int loadTexture(const char* path);
-void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture);
+unsigned int loadTexture(const char* path, int comp = 0);
+void RenderCube();
 void RenderSkybox();
 void RenderTerrain();
-unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
+unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, unsigned char*& data, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
 
 //util
 glm::vec3 getRandCol();
@@ -45,11 +45,12 @@ unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
-glm::vec3 camPos = glm::vec3(0.0f, 0.0f, 0.0f);
+glm::vec3 camPos = glm::vec3(500.0f, 500.0f, 500.0f);
 glm::mat4 view;
 glm::mat4 projection;
 
-unsigned int boxVAO, boxEBO;
+//boxData
+unsigned int boxVAO, boxEBO, boxTextureId, boxNormalId;
 int boxSize, boxIndexCount;
 static float FOV = 45.0f;
 
@@ -60,7 +61,9 @@ glm::quat camQuat = glm::quat(glm::vec3(glm::radians(camPitch), glm::radians(cam
 bool keys[1024];
 
 //Terrain Data
-unsigned int terrainVAO, terrainIndexCount, HeightMapId;
+unsigned int terrainVAO, terrainIndexCount, heightMapId, heightNormalId;
+unsigned char* heightMapTexture;
+unsigned int dirt, sand, grass, rock, snow;
 
 int main()
 {
@@ -74,10 +77,18 @@ int main()
 	CreateShaders();
 
 	//texture geometry stuff
-	unsigned int boxTexure = loadTexture("textures/cardbox.jpg");
-	unsigned int boxNormalMap = loadTexture("textures/cardbox_normal.png");
+	boxTextureId = loadTexture("textures/cardbox.jpg");
+	boxNormalId = loadTexture("textures/cardbox_normal.png");
 	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
-	terrainVAO = GeneratePlane("textures/heightmap.jpg", GL_RGBA, 4, 100.0f, 5.0f, terrainIndexCount, HeightMapId);
+
+	terrainVAO = GeneratePlane("textures/terrainheightmap.jpg", GL_RGBA, 4, heightMapTexture, 20.0f, 5.0f, terrainIndexCount, heightMapId);
+	heightNormalId = loadTexture("textures/terrainnormalmap.png");
+
+	dirt = loadTexture("textures/terrain/dirt.jpg");
+	sand = loadTexture("textures/terrain/sand.jpg");
+	grass = loadTexture("textures/terrain/grass.png", 4);
+	rock = loadTexture("textures/terrain/rock.jpg");
+	snow = loadTexture("textures/terrain/snow.jpg");
 
 	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 5000.0f);
@@ -90,9 +101,9 @@ int main()
 		glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		RenderCube(boxNormalMap, boxTexure);
 		RenderSkybox();
 		RenderTerrain();
+		RenderCube();
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -143,12 +154,35 @@ void RenderTerrain() {
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
+	double time = glfwGetTime();
+	lightDir = glm::normalize(glm::vec3(glm::sin(time / 10), -.5, glm::cos(time / 10)));
 	glUniform3fv(glGetUniformLocation(terrainProgram, "lightDir"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(terrainProgram, "camPos"), 1, glm::value_ptr(camPos));
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, HeightMapId);
 	glUniform1i(glGetUniformLocation(terrainProgram, "mainTexture"), 0);
+	glUniform1i(glGetUniformLocation(terrainProgram, "normalMap"), 1);
+
+	glUniform1i(glGetUniformLocation(terrainProgram, "dirt"), 2);
+	glUniform1i(glGetUniformLocation(terrainProgram, "sand"), 3);
+	glUniform1i(glGetUniformLocation(terrainProgram, "grass"), 4);
+	glUniform1i(glGetUniformLocation(terrainProgram, "rock"), 5);
+	glUniform1i(glGetUniformLocation(terrainProgram, "snow"), 6);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, heightMapId);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, heightNormalId);
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, dirt);
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, sand);
+	glActiveTexture(GL_TEXTURE4);
+	glBindTexture(GL_TEXTURE_2D, grass);
+	glActiveTexture(GL_TEXTURE5);
+	glBindTexture(GL_TEXTURE_2D, rock);
+	glActiveTexture(GL_TEXTURE6);
+	glBindTexture(GL_TEXTURE_2D, snow);
 
 	// Bind vertex array and draw
 	glBindVertexArray(terrainVAO);
@@ -158,21 +192,22 @@ void RenderTerrain() {
 	glDisable(GL_CULL_FACE);
 }
 
-void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture) {
+void RenderCube() {
 	//set texture channels
+	glEnable(GL_DEPTH);
 	glEnable(GL_CULL_FACE);
-	glCullFace(GL_FRONT);
+	glCullFace(GL_BACK);
 
 	glUseProgram(shaderProgram);
 
-	glm::vec3 size = glm::vec3(100, 100, 100);
+	glm::vec3 size = glm::vec3(10, 10, 10);
 	glm::vec3 position = glm::vec3(0, 0, 0);
 	glm::mat4 world = glm::mat4(1.0f);
 	float degrees = 0;
 
 	world = glm::translate(world, position);
-	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
 	world = glm::scale(world, size);
+	world = glm::rotate(world, glm::radians(degrees), glm::vec3(0, 1, 0));
 
 	//set channels world
 	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
@@ -184,18 +219,22 @@ void RenderCube(unsigned int boxNormalMap, unsigned int boxTexture) {
 
 	glUniform1i(glGetUniformLocation(shaderProgram, "mainTexture"), 0);
 	glUniform1i(glGetUniformLocation(shaderProgram, "normalMap"), 1);
-
+	
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, boxNormalMap);
+	glBindTexture(GL_TEXTURE_2D, boxNormalId);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, boxTexture);
+	glBindTexture(GL_TEXTURE_2D, boxTextureId);
+
+	glBindVertexArray(boxVAO);
+	glDrawElements(GL_TRIANGLES, boxIndexCount, GL_UNSIGNED_INT, 0);
 
 	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH);
 }
 
-unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID) {
+unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, unsigned char* &data, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID) {
 	int width = 0, height = 0 , channels = 0;
-	unsigned char* data = nullptr;
+	data = nullptr;
 
 	if (heightmap != nullptr) {
 		data = stbi_load(heightmap, &width, &height, &channels, comp);
@@ -220,9 +259,7 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 		return 0;
 	}
 
-
 	int stride = 8;
-	size_t wtimesh = static_cast<size_t>(width) * static_cast<size_t>(height);
 	float* vertices = new float[(width * height) * stride];
 	unsigned int* indices = new unsigned int[(width - 1) * (height - 1) * 6];
 
@@ -232,8 +269,10 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 		int x = i % width;
 		int z = i / width;
 
+		float texHeight = (float)data[i * comp];
+
 		vertices[index++] = static_cast<float>(x) * xzScale;
-		vertices[index++] = 0;
+		vertices[index++] = (texHeight / 255.0f)* hScale;
 		vertices[index++] = static_cast<float>(z) * xzScale;
 		
 		vertices[index++] = 0;
@@ -293,7 +332,7 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, float
 	delete[] vertices;
 	delete[] indices;
 
-	stbi_image_free(data);
+	//stbi_image_free(data);
 
 	return VAO;
 }
@@ -617,7 +656,7 @@ void loadFile(const char* fileName, char*& output)
 	}
 }
 
-unsigned int loadTexture(const char* path)
+unsigned int loadTexture(const char* path, int comp)
 {
 	//Gen & Bind texture Id
 	unsigned int textureId;
@@ -630,8 +669,10 @@ unsigned int loadTexture(const char* path)
 
 	//LoadTexture
 	int width, height, nrChannels;
-	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
+	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, comp);
 	if (data) {
+		if(comp != 0) { nrChannels = comp; }
+
 		if (nrChannels == 3) {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
 		}

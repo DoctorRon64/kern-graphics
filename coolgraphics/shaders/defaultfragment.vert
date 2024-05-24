@@ -23,12 +23,12 @@ void main()
 
     // Lighting calculations for the first light source
     vec3 viewDir = normalize(camPos - worldPos.xyz);
-    vec3 reflDir = reflect(-lightDir, normal);
+    vec3 reflDir = reflect(lightDir, normal);
     float lightValue = max(dot(normal, lightDir), 0.0);
     float spec = pow(max(dot(reflDir, viewDir), 0.0), 8);
 
     vec3 ambient = texture(mainTexture, uv).rgb;
-    vec3 diffuse = lightValue * texture(mainTexture, uv).rgb;
+    vec3 diffuse = -lightValue * texture(mainTexture, uv).rgb;
     vec3 specular = spec * vec3(1.0); // Assuming white specular light
 
     // Final Color Calculation
