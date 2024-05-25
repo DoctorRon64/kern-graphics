@@ -15,21 +15,26 @@
 #include <glm/gtc/type_ptr.hpp>
 
 //Forward Declarations
-void processInput(GLFWwindow*& window);
+void processInput(GLFWwindow*& window, float deltaTime);
 int init(GLFWwindow*& window, int width, int height);
 
 //Create Stuff
-void CreateShaders();
-void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
+void CreateShader(unsigned int& programId, const char* vertex, const char* fragment);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path, int comp = 0);
 void RenderCube();
 void RenderSkybox();
 void RenderTerrain();
 unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, unsigned char*& data, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
+void setupRescources();
+
+//postFX
+void createFrameBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& depthBufferId);
+void renderToBuffer(unsigned int frameBufferTo, unsigned int colorBufferFrom, unsigned int shader);
+void renderQuad();
 
 //util
-glm::vec3 getRandCol();
+void CalculateDeltaTime();
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void loadFile(const char* fileName, char*& output);
@@ -40,12 +45,14 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 /////////////////////////////////////////////////////////////////////////
 
 // Program ID
-unsigned int shaderProgram, skyProgram, terrainProgram;
+unsigned int shaderProgram, skyProgram, terrainProgram, chromabbProgram;
 unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
 glm::vec3 camPos = glm::vec3(0, 0, 0);
+glm::vec3 camUp;
+glm::vec3 camFor;
 glm::mat4 view;
 glm::mat4 projection;
 
@@ -53,6 +60,10 @@ glm::mat4 projection;
 unsigned int boxVAO, boxEBO, boxTextureId, boxNormalId;
 int boxSize, boxIndexCount;
 static float FOV = 45.0f;
+
+// time 
+float deltaTime = 0.0f;	// Time between current frame and last frame
+float lastFrame = 0.0f; // Time of last frame
 
 bool firstMouse = true;
 float lastX, lastY;
@@ -74,29 +85,26 @@ int main()
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
 
-	CreateShaders();
+	setupRescources();
 
-	//texture geometry stuff
-	boxTextureId = loadTexture("textures/cardbox.jpg");
-	boxNormalId = loadTexture("textures/cardbox_normal.png");
-	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
+	unsigned int frameBuf1;
+	unsigned int colorBuf1;
+	unsigned int depthBuf1;
 
-	terrainVAO = GeneratePlane("textures/terrainheightmap.jpg", GL_RGBA, 4, heightMapTexture, 20.0f, 5.0f, terrainIndexCount, heightMapId);
-	heightNormalId = loadTexture("textures/terrainnormalmap.png");
-
-	dirt = loadTexture("textures/terrain/dirt.jpg");
-	sand = loadTexture("textures/terrain/sand.jpg");
-	grass = loadTexture("textures/terrain/grass.png", 4);
-	rock = loadTexture("textures/terrain/rock.jpg");
-	snow = loadTexture("textures/terrain/snow.jpg");
+	createFrameBuffer(screenWidth, screenHeight, frameBuf1, colorBuf1, depthBuf1);
 
 	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 5000.0f);
 
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
-		processInput(window);
-		
+		CalculateDeltaTime();
+		processInput(window, deltaTime);
+		view = glm::lookAt(camPos, camPos + camFor, camUp);
+
+
+		glBindFramebuffer(GL_FRAMEBUFFER, frameBuf1);
+
 		// Rendering
 		glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -105,12 +113,42 @@ int main()
 		RenderTerrain();
 		RenderCube();
 
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		//post processing
+
+		renderToBuffer(0, colorBuf1, chromabbProgram);
+
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
 
 	return 0;
+}
+
+void setupRescources() {
+	stbi_set_flip_vertically_on_load(true);
+
+	//texture geometry stuff
+	boxTextureId = loadTexture("textures/cardbox.jpg");
+	boxNormalId = loadTexture("textures/cardbox_normal.png");
+	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
+
+	terrainVAO = GeneratePlane("textures/terrainheightmap.png", GL_RGBA, 4, heightMapTexture, 200.0f, 5.0f, terrainIndexCount, heightMapId);
+	heightNormalId = loadTexture("textures/terrainnormalmap.png");
+
+	dirt = loadTexture("textures/terrain/dirt.jpg");
+	sand = loadTexture("textures/terrain/sand.jpg");
+	grass = loadTexture("textures/terrain/grass.png", 4);
+	rock = loadTexture("textures/terrain/rock.jpg");
+	snow = loadTexture("textures/terrain/snow.jpg");
+
+	CreateShader(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
+	CreateShader(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
+	CreateShader(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
+	CreateShader(chromabbProgram, "shaders/pp/vert_img.glsl", "shaders/pp/frag_chrabb.glsl");
+
+	glUseProgram(chromabbProgram);
 }
 
 void RenderSkybox() {
@@ -444,15 +482,7 @@ void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numInd
 	glEnableVertexAttribArray(5);
 }
 
-void CreateShaders()
-{
-	// Create shader program
-	CreateProgram(shaderProgram, "shaders/defaultvertex.vert", "shaders/defaultfragment.vert");
-	CreateProgram(skyProgram, "shaders/skyvertex.vert", "shaders/skyfrag.vert");
-	CreateProgram(terrainProgram, "shaders/terrainvertex.vert", "shaders/terrainfrag.vert");
-}
-
-void CreateProgram(unsigned int& programId, const char* vertex, const char* fragment) {
+void CreateShader(unsigned int& programId, const char* vertex, const char* fragment) {
 
 	char* vertexSrc;
 	char* fragmentSrc;
@@ -534,41 +564,55 @@ int init(GLFWwindow*& window, int width, int height) {
 	return 0;
 }
 
-void processInput(GLFWwindow*& window)
+void CalculateDeltaTime() {
+	float currentFrame = static_cast<float>(glfwGetTime());
+	deltaTime = currentFrame - lastFrame;
+	lastFrame = currentFrame;
+}
+
+void processInput(GLFWwindow*& window, float deltaTime)
 {
 	// Exit the application if ESC key is pressed
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
 
-	// Movement speed multiplier
-																	//sprinting - walking
-	float speed = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 3.0f : 1.0f;
+	static double cursorX = -1, cursorY = -1, lastCursorX, lastCursorY;
+	static float Yaw, Pitch;
+	static float speed = 100.0f;
+	float sensitivity = 100.0f * deltaTime;
 
-	bool camChanged = false;
+	if (cursorX == -1) {
+		glfwGetCursorPos(window, &cursorX, &cursorY);
+	}
+	lastCursorX = cursorX;
+	lastCursorY = cursorY;
+	glfwGetCursorPos(window, &cursorX, &cursorY);
+	glm::vec2 mouseDelta(cursorX - lastCursorX, cursorY - lastCursorY);
 
-	if (keys[GLFW_KEY_W]) {
-		camPos += camQuat * glm::vec3(0, 0, 1) * speed;
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_S]) {
-		camPos += camQuat * glm::vec3(0, 0, -1) * speed;
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_A]) {
-		camPos += camQuat * glm::vec3(1, 0, 0) * speed;
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_D]) {
-		camPos += camQuat * glm::vec3(-1, 0, 0) * speed;
-		camChanged = true;
-	}
+	Yaw -= mouseDelta.x * sensitivity;
+	Pitch += mouseDelta.y * sensitivity;
 
-	if (camChanged) {
-		glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
-		glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
-		view = glm::lookAt(camPos, camPos + camFor, camUp);
-	}
+	if (Pitch < -90.0f) Pitch -= -90.0f;
+	else if (Pitch > 90.0f) Pitch = 90.0f;
+	if (Yaw < -180.0f) Yaw += 360.0f;
+	else if (Yaw > 180.0f) Yaw -= 360.0f;
+
+	glm::vec3 euler(glm::radians(camPitch), glm::radians(camYaw), 0);
+	glm::quat q(euler);
+	glm::vec3 translation(0, 0, 0);
+
+	speed = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 300.0f : 100.0f;
+	if (keys[GLFW_KEY_W]) translation.z += speed * deltaTime;
+	if (keys[GLFW_KEY_S]) translation.z -= speed * deltaTime;
+	if (keys[GLFW_KEY_A]) translation.x += speed * deltaTime;
+	if (keys[GLFW_KEY_D]) translation.x -= speed * deltaTime;
+	if (keys[GLFW_KEY_SPACE]) translation.y += speed * deltaTime;
+	if (keys[GLFW_KEY_LEFT_CONTROL]) translation.y -= speed * deltaTime;
+
+	camPos += q * translation;
+	camUp = q * glm::vec3(0, 1, 0);
+	camFor = q * glm::vec3(0, 0, 1);
 }
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
@@ -599,7 +643,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	view = glm::lookAt(camPos, camPos + camFor, camUp);
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) 
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (action == GLFW_PRESS) {
 		keys[key] = true;
@@ -607,27 +651,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	else if (action == GLFW_RELEASE) {
 		keys[key] = false;
 	}
-}
-
-glm::vec3 getRandCol() {
-	// Usage
-	glm::vec3 rainbowColors[] = {
-		glm::vec3(1.0f, 0.0f, 0.0f),   // Red
-		glm::vec3(1.0f, 0.5f, 0.0f),   // Orange
-		glm::vec3(1.0f, 1.0f, 0.0f),   // Yellow
-		glm::vec3(0.0f, 1.0f, 0.0f),   // Green
-		glm::vec3(0.0f, 0.0f, 1.0f),   // Blue
-		glm::vec3(0.75f, 0.0f, 0.75f)  // Purple
-	};
-	int numColors = sizeof(rainbowColors) / sizeof(rainbowColors[0]);
-
-	double time = glfwGetTime();
-	double colorIndex = fmod(time, numColors);
-	int colorIndex1 = static_cast<int>(colorIndex) % numColors;
-	int colorIndex2 = (colorIndex1 + 1) % numColors;
-	double factor = colorIndex - floor(colorIndex);
-	glm::vec3 interpolatedColor = glm::mix(rainbowColors[colorIndex1], rainbowColors[colorIndex2], factor);
-	return interpolatedColor;
 }
 
 void InfoShaderLog(unsigned int shaderId, int success, char* infoLog) {
@@ -671,7 +694,7 @@ unsigned int loadTexture(const char* path, int comp)
 	int width, height, nrChannels;
 	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, comp);
 	if (data) {
-		if(comp != 0) { nrChannels = comp; }
+		if (comp != 0) { nrChannels = comp; }
 
 		if (nrChannels == 3) {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
@@ -692,4 +715,81 @@ unsigned int loadTexture(const char* path, int comp)
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	return textureId;
+}
+
+void createFrameBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& depthBufferId) {
+	//generate frame buffer
+	glGenFramebuffers(1, &frameBufferId);
+
+	//generate color buffer
+	glGenTextures(1, &colorBufferId);
+	glBindTexture(GL_TEXTURE_2D, colorBufferId);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+
+	//generate depthbuffer
+	glGenRenderbuffers(1, &depthBufferId);
+	glBindRenderbuffer(GL_RENDERBUFFER, depthBufferId);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+
+	//binding buffers
+	glBindFramebuffer(GL_FRAMEBUFFER, frameBufferId);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorBufferId, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferId);
+
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cout << "framebuffer not found" << std::endl;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void renderToBuffer(unsigned int frameBufferTo, unsigned int colorBufferFrom, unsigned int shader) {
+	glBindFramebuffer(GL_FRAMEBUFFER, frameBufferTo);
+
+	glUseProgram(shader);
+
+	// Rendering
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, colorBufferFrom);
+
+	renderQuad();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+// renderQuad() renders a 1x1 XY quad in NDC
+// -------------------------
+unsigned int quadVAO = 0;
+unsigned int quadVBO;
+
+void renderQuad()
+{
+	if (quadVAO == 0)
+	{
+		float quadVertices[] = {
+			// positions        // texture Coords
+			-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+			-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+			 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+			 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+		};
+		// setup plane VAO
+		glGenVertexArrays(1, &quadVAO);
+		glGenBuffers(1, &quadVBO);
+		glBindVertexArray(quadVAO);
+		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+	}
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
 }
