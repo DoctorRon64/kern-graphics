@@ -11,14 +11,18 @@ vec3 lerp(vec3 a, vec3 b, float t) {
     return a + (b - a) * t;
 }
 
+vec3 rgb(float r, float g, float b) {
+    return vec3(r / 255.0, g / 255.0, b / 255.0);
+}
+
 void main()
 {
-    vec3 topColor = vec3(68.0 / 255.0, 118.0 / 255.0 , 189.0 / 255.0);
-    vec3 bottomColor = vec3(188.0 / 255.0,  214.0 / 255.0, 231.0 / 255.0);
+    vec3 topColor = rgb(68.0, 118.0, 189.0);
+    vec3 bottomColor = rgb(210.0, 232.0, 247.0);
     vec3 viewDir = normalize(worldPos.xyz - camPos);
 
     vec3 lightDirection = normalize(lightDir);
-    vec3 sunColor = vec3(1.0, 200 / 255.0, 50 / 255.0);
+    vec3 sunColor = rgb(255.0, 200.0, 50.0);
     float sun = max(pow(dot(-viewDir, lightDirection), 128), 0.0);
     
     FragColor = vec4(lerp(bottomColor, topColor, abs(viewDir.y)) + sun * sunColor, 1);

@@ -5,7 +5,6 @@ layout(location = 1) out vec4 DepthColor;
 in vec2 uv;
 in vec3 normal;
 in vec4 worldPos;
-in vec4 FragPos;
 
 uniform sampler2D mainTexture;
 uniform sampler2D normalMap;
@@ -32,16 +31,12 @@ vec2 lerp(vec2 a, vec2 b, float t) {
 
 void clip(float d) 
 {
-    if (d < 0) discard;   
+    if (d > 0) discard;   
 }
 
 void main()
 {
-    
-    if ((clipDir == 1 && FragPos.y < waterHeight) || (clipDir == -1 && FragPos.y > waterHeight)) {
-        discard;
-    }
-
+    clip(clipDir * (waterHeight - worldPos.y)); 
 
     // Normal Map
     vec3 normal = texture(normalMap, uv).rgb;

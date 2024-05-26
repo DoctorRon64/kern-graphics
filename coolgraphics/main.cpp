@@ -43,6 +43,10 @@ void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsig
 void renderToBuffer(unsigned int To, unsigned int From, unsigned int shader);
 void renderQuad();
 
+//waterRendering
+void renderInvertedScene(glm::mat4 projection, FrameBuffer target);
+void renderWaterPlane(glm::mat4 projection, glm::mat4 view, FrameBuffer target, FrameBuffer InvertSource);
+
 //util
 void CalculateDeltaTime();
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -55,7 +59,7 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 /////////////////////////////////////////////////////////////////////////
 
 // Program ID
-unsigned int shaderProgram, skyProgram, terrainProgram, chromabbProgram, blitProgram;
+unsigned int shaderProgram, skyProgram, terrainProgram, chromabbProgram, blitProgram, waterProgram;
 unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
@@ -63,6 +67,8 @@ glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
 glm::vec3 camPos = glm::vec3(0, 0, 0);
 glm::vec3 camUp;
 glm::vec3 camFor;
+glm::mat4 view;
+glm::mat4 projection;
 
 //boxData
 unsigned int boxVAO, boxEBO, boxTextureId, boxNormalId;
@@ -84,11 +90,10 @@ unsigned int terrainVAO, terrainIndexCount, heightMapId, heightNormalId;
 unsigned char* heightMapTexture;
 unsigned int dirt, sand, grass, rock, snow;
 
-
 unsigned int defaultAttach[1] = { GL_COLOR_ATTACHMENT0 };
 unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 
-float waterHeight = 20.0f;
+float waterHeight = 14.0f;
 
 int main()
 {
@@ -107,8 +112,6 @@ int main()
 	createFrameBuffer(screenWidth, screenHeight, PostProcess2.Id, PostProcess2.color1, PostProcess2.depth);
 	createSceneBuffer(screenWidth, screenHeight, scene.Id, scene.color1,scene.color2, scene.depth);
 
-	glm::mat4 view;
-	glm::mat4 projection;
 	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 5000.0f);
 
@@ -118,30 +121,24 @@ int main()
 		processInput(window, deltaTime);
 		view = glm::lookAt(camPos, camPos + camFor, camUp);
 
+		//render scene
 		glBindFramebuffer(GL_FRAMEBUFFER, scene.Id);
 		glDrawBuffers(2, sceneAttach);
-
-		// Rendering
-		glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		RenderSkybox(view, projection);
-		RenderTerrain(view, projection, -1);
-		RenderCube(view, projection);
-
+			glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			RenderSkybox(view, projection);
+			RenderTerrain(view, projection, 1);
+			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		//render inverted water
-
-
-		//render water (to scene buffer)
-
+		renderInvertedScene(projection, PostProcess1);
+		renderWaterPlane(projection, view, scene, PostProcess1);
 
 		//post processing
-		renderToBuffer(PostProcess1.Id, scene.color1, chromabbProgram);
+		//renderToBuffer(PostProcess1.Id, scene.color1, chromabbProgram);
 		
 		//blit to screen
-		renderToBuffer(screenBuffer.Id, PostProcess1.color1, blitProgram);
+		renderToBuffer(screenBuffer.Id, scene.color1, blitProgram);
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -159,7 +156,7 @@ void setupRescources() {
 	boxNormalId = loadTexture("textures/cardbox_normal.png");
 	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
 
-	terrainVAO = GeneratePlane("textures/terrainheightmap.png", GL_RGBA, 4, heightMapTexture, 200.0f, 5.0f, terrainIndexCount, heightMapId);
+	terrainVAO = GeneratePlane("textures/terrainheightmap.png", GL_RGBA, 4, heightMapTexture, 100.0f, 5.0f, terrainIndexCount, heightMapId);
 	heightNormalId = loadTexture("textures/terrainnormalmap.png");
 
 	dirt = loadTexture("textures/terrain/dirt.jpg");
@@ -173,9 +170,40 @@ void setupRescources() {
 	CreateShader(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
 	CreateShader(chromabbProgram, "shaders/pp/chrabb_vert.glsl", "shaders/pp/chrabb_frag.glsl");
 	CreateShader(blitProgram, "shaders/pp/img_vert.glsl", "shaders/pp/img_frag.glsl");
-
+	CreateShader(waterProgram, "shaders/waterVert.glsl", "shaders/waterFrag.glsl");
+	
 	glUseProgram(blitProgram);
 	glUseProgram(chromabbProgram);
+	glUseProgram(waterProgram);
+	glUniform1i(glGetUniformLocation(waterProgram, "color"), 0);
+	glUniform1i(glGetUniformLocation(waterProgram, "depth"), 1);
+	glUniform1i(glGetUniformLocation(waterProgram, "invert"), 2);
+}
+
+void renderInvertedScene(glm::mat4 projection, FrameBuffer target)
+{
+	//create inverted viewMatrix
+	glm::vec3 invertPos = camPos;
+	invertPos.y = -invertPos.y + waterHeight * 2;
+	glm::vec3 invertUp = glm::reflect(camUp, glm::vec3(0, 1, 0));
+	glm::vec3 invertTarget = camPos + camFor;
+	invertTarget.y = -invertTarget.y + waterHeight * 2;
+
+	glm::mat4 invertView = glm::lookAt(invertPos, invertTarget, invertUp);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, target.Id);
+	glDrawBuffers(1, defaultAttach);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glm::vec3 temp = camPos;
+	camPos = invertPos;
+
+	RenderSkybox(invertView, projection);
+	RenderTerrain(invertView, projection, 1);
+	RenderCube(invertView, projection);
+
+	camPos = temp;
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void RenderSkybox(glm::mat4 view, glm::mat4 projection) {
@@ -206,12 +234,12 @@ void RenderSkybox(glm::mat4 view, glm::mat4 projection) {
 }
 
 void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir) {
+	glUseProgram(terrainProgram);
+
 	glEnable(GL_DEPTH);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
-
-	glUseProgram(terrainProgram);
 
 	glm::mat4 world = glm::mat4(1.0f);
 
@@ -257,6 +285,39 @@ void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir) {
 
 	glDisable(GL_DEPTH);
 	glDisable(GL_CULL_FACE);
+}
+
+void renderWaterPlane(glm::mat4 projection, glm::mat4 view, FrameBuffer scene, FrameBuffer invert)
+{
+	//buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, scene.Id);
+	glDrawBuffers(2, sceneAttach);
+
+	//worldmatrix opbouwen
+	glm::mat4 world = glm::mat4(1.0f);
+	world = glm::translate(world, glm::vec3(0, waterHeight, 0));
+
+	//settings
+	glUniformMatrix4fv(glGetUniformLocation(waterProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
+	glUniformMatrix4fv(glGetUniformLocation(waterProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(waterProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(waterProgram, "lightDir"), 1, glm::value_ptr(lightDir));
+	glUniform3fv(glGetUniformLocation(waterProgram, "camPos"), 1, glm::value_ptr(camPos));
+	glUniform1f(glGetUniformLocation(waterProgram, "waterHeight"), waterHeight);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, scene.color1);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, scene.color2);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, invert.color1);
+
+	//renderplane
+	glBindVertexArray(terrainVAO);
+	glDrawElements(GL_TRIANGLES, terrainIndexCount, GL_UNSIGNED_INT, 0);
+
+	//unbind
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void RenderCube(glm::mat4 view, glm::mat4 projection) {
@@ -779,6 +840,7 @@ void createFrameBuffer(int width, int height, unsigned int& frameBufferId, unsig
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
 void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2, unsigned int& depthBufferId) {
 	//generate frame buffer
 	glGenFramebuffers(1, &frameBufferId);
@@ -862,3 +924,4 @@ void renderQuad()
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glBindVertexArray(0);
 }
+
