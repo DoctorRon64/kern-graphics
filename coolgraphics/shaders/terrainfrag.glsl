@@ -1,17 +1,26 @@
 #version 330 core
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
+layout(location = 1) out vec4 DepthColor;
 
 in vec2 uv;
 in vec3 normal;
 in vec4 worldPos;
+in vec4 FragPos;
 
 uniform sampler2D mainTexture;
 uniform sampler2D normalMap;
 
-uniform sampler2D dirt, sand, grass, rock, snow;
+uniform sampler2D dirt;
+uniform sampler2D sand;
+uniform sampler2D grass;
+uniform sampler2D rock;
+uniform sampler2D snow;
 
 uniform vec3 lightDir;
 uniform vec3 camPos;
+
+uniform float waterHeight;
+uniform int clipDir;
 
 vec3 lerp(vec3 a, vec3 b, float t) {
     return a + (b - a) * t;
@@ -21,8 +30,19 @@ vec2 lerp(vec2 a, vec2 b, float t) {
     return a + (b - a) * t;
 }
 
+void clip(float d) 
+{
+    if (d < 0) discard;   
+}
+
 void main()
 {
+    
+    if ((clipDir == 1 && FragPos.y < waterHeight) || (clipDir == -1 && FragPos.y > waterHeight)) {
+        discard;
+    }
+
+
     // Normal Map
     vec3 normal = texture(normalMap, uv).rgb;
     normal = normalize(normal * 2.0 - 1.0);
@@ -32,14 +52,12 @@ void main()
 
     // Lighting calculations for the first light source
     vec3 viewDir = normalize(camPos - worldPos.xyz);
-    //vec3 reflDir = reflect(-lightDir, normal);
-
+    vec3 reflDir = reflect(-lightDir, normal);
     float lightValue = max(-dot(normal, lightDir), 0.0);
-    //float spec = pow(max(dot(reflDir, viewDir), 0.0), 8);
+    float spec = pow(max(dot(reflDir, viewDir), 0.0), 8);
 
     //build color
     float y = worldPos.y;
-
     float dist = length(worldPos.xyz - camPos);
     float uvLerp = clamp((dist - 250 /* 250 */) / 159, -1, 1) * .5 + .5;
 
@@ -76,7 +94,7 @@ void main()
     vec3 fogColor = lerp(bottomColor, topColor, max(viewDir.y, 0.0));
 
     // Final Color Calculation
-    vec4 outputCol = vec4(lerp(diffuse * min(lightValue + 0.1, 1.0), fogColor, fog) ,1.0);// + spec * outputColor.rgb;
-
+    vec4 outputCol = vec4(lerp(diffuse * min(lightValue + 0.1, 1.0), fogColor, fog) ,1.0); + spec * outputCol.rgb;
     FragColor = outputCol;
+    DepthColor = vec4(1.0f, 0.0f, 0.0f, 0.0f);
 }

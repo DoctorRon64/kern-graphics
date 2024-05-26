@@ -14,6 +14,15 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+struct FrameBuffer {
+	unsigned int Id = 0;
+	unsigned int color1 = 0, color2 = 0, depth = 0;
+
+	FrameBuffer() {};
+};
+
+FrameBuffer screenBuffer;
+
 //Forward Declarations
 void processInput(GLFWwindow*& window, float deltaTime);
 int init(GLFWwindow*& window, int width, int height);
@@ -22,15 +31,16 @@ int init(GLFWwindow*& window, int width, int height);
 void CreateShader(unsigned int& programId, const char* vertex, const char* fragment);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path, int comp = 0);
-void RenderCube();
-void RenderSkybox();
-void RenderTerrain();
+void RenderCube(glm::mat4 view, glm::mat4 projection);
+void RenderSkybox(glm::mat4 view, glm::mat4 projection);
+void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir = 0);
 unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, unsigned char*& data, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
 void setupRescources();
 
 //postFX
 void createFrameBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& depthBufferId);
-void renderToBuffer(unsigned int frameBufferTo, unsigned int colorBufferFrom, unsigned int shader);
+void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2, unsigned int& depthBufferId);
+void renderToBuffer(unsigned int To, unsigned int From, unsigned int shader);
 void renderQuad();
 
 //util
@@ -45,7 +55,7 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 /////////////////////////////////////////////////////////////////////////
 
 // Program ID
-unsigned int shaderProgram, skyProgram, terrainProgram, chromabbProgram;
+unsigned int shaderProgram, skyProgram, terrainProgram, chromabbProgram, blitProgram;
 unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
@@ -53,8 +63,6 @@ glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
 glm::vec3 camPos = glm::vec3(0, 0, 0);
 glm::vec3 camUp;
 glm::vec3 camFor;
-glm::mat4 view;
-glm::mat4 projection;
 
 //boxData
 unsigned int boxVAO, boxEBO, boxTextureId, boxNormalId;
@@ -76,6 +84,12 @@ unsigned int terrainVAO, terrainIndexCount, heightMapId, heightNormalId;
 unsigned char* heightMapTexture;
 unsigned int dirt, sand, grass, rock, snow;
 
+
+unsigned int defaultAttach[1] = { GL_COLOR_ATTACHMENT0 };
+unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+
+float waterHeight = 20.0f;
+
 int main()
 {
 	GLFWwindow* window;
@@ -87,12 +101,14 @@ int main()
 
 	setupRescources();
 
-	unsigned int frameBuf1;
-	unsigned int colorBuf1;
-	unsigned int depthBuf1;
+	/*chromatic abberation*/ 
+	FrameBuffer PostProcess1, PostProcess2, scene;
+	createFrameBuffer(screenWidth, screenHeight, PostProcess1.Id, PostProcess1.color1, PostProcess1.depth);
+	createFrameBuffer(screenWidth, screenHeight, PostProcess2.Id, PostProcess2.color1, PostProcess2.depth);
+	createSceneBuffer(screenWidth, screenHeight, scene.Id, scene.color1,scene.color2, scene.depth);
 
-	createFrameBuffer(screenWidth, screenHeight, frameBuf1, colorBuf1, depthBuf1);
-
+	glm::mat4 view;
+	glm::mat4 projection;
 	view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 	projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 5000.0f);
 
@@ -102,21 +118,30 @@ int main()
 		processInput(window, deltaTime);
 		view = glm::lookAt(camPos, camPos + camFor, camUp);
 
-
-		glBindFramebuffer(GL_FRAMEBUFFER, frameBuf1);
+		glBindFramebuffer(GL_FRAMEBUFFER, scene.Id);
+		glDrawBuffers(2, sceneAttach);
 
 		// Rendering
 		glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		RenderSkybox();
-		RenderTerrain();
-		RenderCube();
+		RenderSkybox(view, projection);
+		RenderTerrain(view, projection, -1);
+		RenderCube(view, projection);
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		//post processing
 
-		renderToBuffer(0, colorBuf1, chromabbProgram);
+		//render inverted water
+
+
+		//render water (to scene buffer)
+
+
+		//post processing
+		renderToBuffer(PostProcess1.Id, scene.color1, chromabbProgram);
+		
+		//blit to screen
+		renderToBuffer(screenBuffer.Id, PostProcess1.color1, blitProgram);
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -146,12 +171,14 @@ void setupRescources() {
 	CreateShader(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
 	CreateShader(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
 	CreateShader(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
-	CreateShader(chromabbProgram, "shaders/pp/vert_img.glsl", "shaders/pp/frag_chrabb.glsl");
+	CreateShader(chromabbProgram, "shaders/pp/chrabb_vert.glsl", "shaders/pp/chrabb_frag.glsl");
+	CreateShader(blitProgram, "shaders/pp/img_vert.glsl", "shaders/pp/img_frag.glsl");
 
+	glUseProgram(blitProgram);
 	glUseProgram(chromabbProgram);
 }
 
-void RenderSkybox() {
+void RenderSkybox(glm::mat4 view, glm::mat4 projection) {
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_DEPTH);
@@ -178,7 +205,7 @@ void RenderSkybox() {
 	glEnable(GL_DEPTH);
 }
 
-void RenderTerrain() {
+void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir) {
 	glEnable(GL_DEPTH);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
@@ -196,6 +223,8 @@ void RenderTerrain() {
 	lightDir = glm::normalize(glm::vec3(glm::sin(time / 10), -.5, glm::cos(time / 10)));
 	glUniform3fv(glGetUniformLocation(terrainProgram, "lightDir"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(terrainProgram, "camPos"), 1, glm::value_ptr(camPos));
+	glUniform1f(glGetUniformLocation(terrainProgram, "waterHeight"), waterHeight);
+	glUniform1i(glGetUniformLocation(terrainProgram, "clipDir"), clipDir);
 
 	glUniform1i(glGetUniformLocation(terrainProgram, "mainTexture"), 0);
 	glUniform1i(glGetUniformLocation(terrainProgram, "normalMap"), 1);
@@ -230,7 +259,7 @@ void RenderTerrain() {
 	glDisable(GL_CULL_FACE);
 }
 
-void RenderCube() {
+void RenderCube(glm::mat4 view, glm::mat4 projection) {
 	//set texture channels
 	glEnable(GL_DEPTH);
 	glEnable(GL_CULL_FACE);
@@ -257,7 +286,7 @@ void RenderCube() {
 
 	glUniform1i(glGetUniformLocation(shaderProgram, "mainTexture"), 0);
 	glUniform1i(glGetUniformLocation(shaderProgram, "normalMap"), 1);
-	
+
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, boxNormalId);
 	glActiveTexture(GL_TEXTURE0);
@@ -270,8 +299,8 @@ void RenderCube() {
 	glDisable(GL_DEPTH);
 }
 
-unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, unsigned char* &data, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID) {
-	int width = 0, height = 0 , channels = 0;
+unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, unsigned char*& data, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID) {
+	int width = 0, height = 0, channels = 0;
 	data = nullptr;
 
 	if (heightmap != nullptr) {
@@ -310,13 +339,13 @@ unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, unsig
 		float texHeight = (float)data[i * comp];
 
 		vertices[index++] = static_cast<float>(x) * xzScale;
-		vertices[index++] = (texHeight / 255.0f)* hScale;
+		vertices[index++] = (texHeight / 255.0f) * hScale;
 		vertices[index++] = static_cast<float>(z) * xzScale;
-		
+
 		vertices[index++] = 0;
 		vertices[index++] = 1;
 		vertices[index++] = 0;
-		
+
 		vertices[index++] = static_cast<float>(x) / (float)width;
 		vertices[index++] = static_cast<float>(z) / (float)height;
 	}
@@ -540,7 +569,7 @@ int init(GLFWwindow*& window, int width, int height) {
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// Create main window
-	window = glfwCreateWindow(width, height, "My Cool Shaders", NULL, NULL);
+	window = glfwCreateWindow(width, height, "Godot", NULL, NULL);
 	if (window == NULL)
 	{
 		std::cout << "Failed to create GLFW window" << std::endl;
@@ -548,6 +577,7 @@ int init(GLFWwindow*& window, int width, int height) {
 		return -1;
 	}
 
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	// Set current context
 	glfwSetCursorPosCallback(window, mouse_callback);
 	glfwSetKeyCallback(window, key_callback);
@@ -579,8 +609,9 @@ void processInput(GLFWwindow*& window, float deltaTime)
 
 	static double cursorX = -1, cursorY = -1, lastCursorX, lastCursorY;
 	static float Yaw, Pitch;
-	static float speed = 100.0f;
-	float sensitivity = 100.0f * deltaTime;
+	static bool firstMouse = true;
+	static float sensitivity = 100.0f * deltaTime;
+	static float camYaw = 0.0f, camPitch = 0.0f;
 
 	if (cursorX == -1) {
 		glfwGetCursorPos(window, &cursorX, &cursorY);
@@ -593,22 +624,27 @@ void processInput(GLFWwindow*& window, float deltaTime)
 	Yaw -= mouseDelta.x * sensitivity;
 	Pitch += mouseDelta.y * sensitivity;
 
-	if (Pitch < -90.0f) Pitch -= -90.0f;
+	if (Pitch < -90.0f) Pitch = -90.0f;
 	else if (Pitch > 90.0f) Pitch = 90.0f;
 	if (Yaw < -180.0f) Yaw += 360.0f;
 	else if (Yaw > 180.0f) Yaw -= 360.0f;
+
+	camYaw -= mouseDelta.x;
+	camPitch = glm::clamp(camPitch + mouseDelta.y, -90.f, 90.f);
+	if (camYaw > 180.0f) camYaw -= 360.0f;
+	if (camYaw < -180.0f) camYaw += 360.0f;
 
 	glm::vec3 euler(glm::radians(camPitch), glm::radians(camYaw), 0);
 	glm::quat q(euler);
 	glm::vec3 translation(0, 0, 0);
 
-	speed = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 300.0f : 100.0f;
-	if (keys[GLFW_KEY_W]) translation.z += speed * deltaTime;
-	if (keys[GLFW_KEY_S]) translation.z -= speed * deltaTime;
-	if (keys[GLFW_KEY_A]) translation.x += speed * deltaTime;
-	if (keys[GLFW_KEY_D]) translation.x -= speed * deltaTime;
-	if (keys[GLFW_KEY_SPACE]) translation.y += speed * deltaTime;
-	if (keys[GLFW_KEY_LEFT_CONTROL]) translation.y -= speed * deltaTime;
+	float speed = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 300.0f : 100.0f;
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) translation.z += speed * deltaTime;
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) translation.z -= speed * deltaTime;
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) translation.x += speed * deltaTime;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) translation.x -= speed * deltaTime;
+	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) translation.y += speed * deltaTime;
+	if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) translation.y -= speed * deltaTime;
 
 	camPos += q * translation;
 	camUp = q * glm::vec3(0, 1, 0);
@@ -640,7 +676,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 
 	glm::vec3 camFor = camQuat * glm::vec3(0, 0, 1);
 	glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
-	view = glm::lookAt(camPos, camPos + camFor, camUp);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -744,9 +779,43 @@ void createFrameBuffer(int width, int height, unsigned int& frameBufferId, unsig
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2, unsigned int& depthBufferId) {
+	//generate frame buffer
+	glGenFramebuffers(1, &frameBufferId);
 
-void renderToBuffer(unsigned int frameBufferTo, unsigned int colorBufferFrom, unsigned int shader) {
-	glBindFramebuffer(GL_FRAMEBUFFER, frameBufferTo);
+	//generate color buffer
+	glGenTextures(1, &colorBufferId);
+	glBindTexture(GL_TEXTURE_2D, colorBufferId);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+
+	glGenTextures(1, &colorBufferId2);
+	glBindTexture(GL_TEXTURE_2D, colorBufferId2);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+
+	//generate depthbuffer
+	glGenRenderbuffers(1, &depthBufferId);
+	glBindRenderbuffer(GL_RENDERBUFFER, depthBufferId);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+
+	//binding buffers
+	glBindFramebuffer(GL_FRAMEBUFFER, frameBufferId);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorBufferId, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, colorBufferId2, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferId);
+
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cout << "framebuffer not found" << std::endl;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void renderToBuffer(unsigned int To, unsigned int From, unsigned int shader) {
+	glBindFramebuffer(GL_FRAMEBUFFER, To);
 
 	glUseProgram(shader);
 
@@ -755,7 +824,7 @@ void renderToBuffer(unsigned int frameBufferTo, unsigned int colorBufferFrom, un
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, colorBufferFrom);
+	glBindTexture(GL_TEXTURE_2D, From);
 
 	renderQuad();
 
