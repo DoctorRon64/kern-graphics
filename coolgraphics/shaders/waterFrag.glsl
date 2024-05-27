@@ -14,6 +14,9 @@ uniform vec3 camPos;
 
 void main() 
 {
-	FragColor = vec4(1);
+	vec2 invertUv = uv;
+	invertUv.x = 1 - invertUv.x;
+
+	FragColor = texture(invert, invertUv);
 	DepthColor = vec4(1, 0, 0 ,1);
 }

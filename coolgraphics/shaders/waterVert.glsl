@@ -7,9 +7,6 @@ out vec2 uv;
 uniform mat4 world, view, projection;
 uniform float waterHeight;
 
-uniform vec3 lightDir;
-uniform vec3 camPos;
-
 void main() 
 {
     worldPos = world * vec4(vPos, 1.0);

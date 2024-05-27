@@ -31,12 +31,12 @@ vec2 lerp(vec2 a, vec2 b, float t) {
 
 void clip(float d) 
 {
-    if (d > 0) discard;   
+    if (d < 0) discard;   
 }
 
 void main()
 {
-    clip(clipDir * (waterHeight - worldPos.y)); 
+    clip(clipDir * (waterHeight - worldPos.y));
 
     // Normal Map
     vec3 normal = texture(normalMap, uv).rgb;
@@ -91,5 +91,5 @@ void main()
     // Final Color Calculation
     vec4 outputCol = vec4(lerp(diffuse * min(lightValue + 0.1, 1.0), fogColor, fog) ,1.0); + spec * outputCol.rgb;
     FragColor = outputCol;
-    DepthColor = vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    DepthColor = vec4(dist / 100);
 }
