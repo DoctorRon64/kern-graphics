@@ -91,7 +91,8 @@ unsigned int dirt, sand, grass, rock, snow;
 unsigned int defaultAttach[1] = { GL_COLOR_ATTACHMENT0 };
 unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 
-float waterHeight = 40.0f;
+float waterHeight = 25.0f;
+unsigned int waterNormalId;
 
 int main()
 {
@@ -155,7 +156,9 @@ void setupRescources() {
 	CreateGeometry(boxVAO, boxEBO, boxSize, boxIndexCount);
 
 	terrainVAO = GeneratePlane("textures/terrainheightmap.png", GL_RGBA, 4, heightMapTexture, 100.0f, 5.0f, terrainIndexCount, heightMapId);
-	heightNormalId = loadTexture("textures/terrainnormalmap.png");
+	heightNormalId = loadTexture("textures/terrain_normalmap.png");
+
+	waterNormalId = loadTexture("textures/water_normalmap.jpg");
 
 	dirt = loadTexture("textures/terrain/dirt.jpg");
 	sand = loadTexture("textures/terrain/sand.jpg");
@@ -172,9 +175,7 @@ void setupRescources() {
 	
 	glUseProgram(blitProgram);
 	glUseProgram(chromabbProgram);
-	glUniform1i(glGetUniformLocation(waterProgram, "color"), 0);
-	glUniform1i(glGetUniformLocation(waterProgram, "depth"), 1);
-	glUniform1i(glGetUniformLocation(waterProgram, "invert"), 2);
+
 }
 
 void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
@@ -240,6 +241,7 @@ void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir) {
 	glCullFace(GL_BACK);
 
 	glm::mat4 world = glm::mat4(1.0f);
+	world = glm::translate(world, glm::vec3(0, 0, 0));
 
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
@@ -295,7 +297,7 @@ void renderWaterPlane(glm::mat4 projection, glm::mat4 view, FrameBuffer scene, F
 
 	//worldmatrix opbouwen
 	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::translate(world, glm::vec3(0, waterHeight, 0));
+	world = glm::translate(world, glm::vec3(0, waterHeight , 0));
 
 	//settings
 	glUniformMatrix4fv(glGetUniformLocation(waterProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
@@ -304,6 +306,12 @@ void renderWaterPlane(glm::mat4 projection, glm::mat4 view, FrameBuffer scene, F
 	glUniform3fv(glGetUniformLocation(waterProgram, "lightDir"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(waterProgram, "camPos"), 1, glm::value_ptr(camPos));
 	glUniform1f(glGetUniformLocation(waterProgram, "waterHeight"), waterHeight);
+	glUniform1f(glGetUniformLocation(waterProgram, "time"), (float)glfwGetTime());
+
+	glUniform1i(glGetUniformLocation(waterProgram, "color"), 0);
+	glUniform1i(glGetUniformLocation(waterProgram, "depth"), 1);
+	glUniform1i(glGetUniformLocation(waterProgram, "invert"), 2);
+	glUniform1i(glGetUniformLocation(waterProgram, "normalMap"), 3);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, scene.color1);
@@ -311,6 +319,8 @@ void renderWaterPlane(glm::mat4 projection, glm::mat4 view, FrameBuffer scene, F
 	glBindTexture(GL_TEXTURE_2D, scene.color2);
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, invert.color1);
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, waterNormalId);
 
 	//renderplane
 	glBindVertexArray(terrainVAO);
