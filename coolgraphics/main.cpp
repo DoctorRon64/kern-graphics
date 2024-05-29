@@ -3,7 +3,10 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-//loading textures
+#include "util/model.h"
+#include "util/mesh.h"
+
+//loading textures models and meshes
 #define STB_IMAGE_IMPLEMENTATION
 #include "util/stb_image.h"
 
@@ -31,6 +34,7 @@ int init(GLFWwindow*& window, int width, int height);
 void CreateShader(unsigned int& programId, const char* vertex, const char* fragment);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path, int comp = 0);
+void RenderModel(Model* model);
 void RenderCube(glm::mat4 view, glm::mat4 projection);
 void RenderSkybox(glm::mat4 view, glm::mat4 projection);
 void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir = 0);
@@ -59,7 +63,7 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 /////////////////////////////////////////////////////////////////////////
 
 // Program ID
-unsigned int shaderProgram, skyProgram, terrainProgram, chromabbProgram, blitProgram, waterProgram;
+unsigned int shaderProgram, skyProgram, terrainProgram, chromabbProgram, blitProgram, waterProgram, modelProgram;
 unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
@@ -87,6 +91,8 @@ bool keys[1024];
 unsigned int terrainVAO, terrainIndexCount, heightMapId, heightNormalId;
 unsigned char* heightMapTexture;
 unsigned int dirt, sand, grass, rock, snow;
+
+Model* aaronHead;
 
 unsigned int defaultAttach[1] = { GL_COLOR_ATTACHMENT0 };
 unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
@@ -136,7 +142,7 @@ int main()
 		renderWaterPlane(projection, view, scene, PostProcess1);
 
 		//post processing
-		//renderToBuffer(PostProcess1, scene, chromabbProgram);
+		renderToBuffer(PostProcess1, scene, chromabbProgram);
 		
 		//blit to screen
 		renderToBuffer(screenBuffer, scene, blitProgram);
@@ -166,16 +172,19 @@ void setupRescources() {
 	rock = loadTexture("textures/terrain/rock.jpg");
 	snow = loadTexture("textures/terrain/snow.jpg");
 
+	aaronHead = new Model("models/aaron/aaron_model.obj");
+
 	CreateShader(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
 	CreateShader(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
 	CreateShader(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
 	CreateShader(chromabbProgram, "shaders/pp/chrabb_vert.glsl", "shaders/pp/chrabb_frag.glsl");
 	CreateShader(blitProgram, "shaders/pp/img_vert.glsl", "shaders/pp/img_frag.glsl");
 	CreateShader(waterProgram, "shaders/waterVert.glsl", "shaders/waterFrag.glsl");
+	CreateShader(modelProgram, "shaders/modelvert.glsl", "shaders/modelfrag.glsl");
 	
+	glUseProgram(modelProgram);
 	glUseProgram(blitProgram);
 	glUseProgram(chromabbProgram);
-
 }
 
 void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
@@ -203,6 +212,14 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 	camPos = temp;
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+/// <summary>
+/// RENDERING STUFFFFFFFFFFFFF
+/// </summary>
+void RenderModel(Model* model) 
+{
+
 }
 
 void RenderSkybox(glm::mat4 view, glm::mat4 projection) {

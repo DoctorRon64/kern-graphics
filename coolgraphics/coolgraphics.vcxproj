@@ -151,6 +151,8 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="util\mesh.h" />
+    <ClInclude Include="util\model.h" />
     <ClInclude Include="util\stb_image.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
