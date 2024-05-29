@@ -34,7 +34,7 @@ int init(GLFWwindow*& window, int width, int height);
 void CreateShader(unsigned int& programId, const char* vertex, const char* fragment);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path, int comp = 0);
-void RenderModel(Model* model);
+void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale);
 void RenderCube(glm::mat4 view, glm::mat4 projection);
 void RenderSkybox(glm::mat4 view, glm::mat4 projection);
 void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir = 0);
@@ -68,7 +68,7 @@ unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
-glm::vec3 camPos = glm::vec3(0, 500, 0);
+glm::vec3 camPos = glm::vec3(900, 500, 900);
 glm::vec3 camUp;
 glm::vec3 camFor;
 
@@ -100,6 +100,10 @@ unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 float waterHeight = 25.0f;
 unsigned int waterNormalId;
 
+/// <summary>////////////////
+/// Functions/
+/// </summary>////////////////
+
 int main()
 {
 	GLFWwindow* window;
@@ -109,6 +113,8 @@ int main()
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
 
+	stbi_set_flip_vertically_on_load(true);
+	
 	setupRescources();
 
 	/*chromatic abberation*/ 
@@ -135,6 +141,8 @@ int main()
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 			RenderSkybox(view, projection);
 			RenderTerrain(view, projection, 0);
+
+			RenderModel(aaronHead, view, projection, glm::vec3(1000, 500, 1000), glm::vec3(0, glfwGetTime() * 2,0), glm::vec3(100,100,100));
 			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -181,8 +189,14 @@ void setupRescources() {
 	CreateShader(blitProgram, "shaders/pp/img_vert.glsl", "shaders/pp/img_frag.glsl");
 	CreateShader(waterProgram, "shaders/waterVert.glsl", "shaders/waterFrag.glsl");
 	CreateShader(modelProgram, "shaders/modelvert.glsl", "shaders/modelfrag.glsl");
-	
+
 	glUseProgram(modelProgram);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_diffuse"), 0);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_specular"), 1);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_normal"), 2);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_roughness"), 3);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_ao"), 4);
+	
 	glUseProgram(blitProgram);
 	glUseProgram(chromabbProgram);
 }
@@ -217,9 +231,27 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 /// <summary>
 /// RENDERING STUFFFFFFFFFFFFF
 /// </summary>
-void RenderModel(Model* model) 
+void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale)
 {
+	glEnable(GL_DEPTH);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
 
+	glUseProgram(modelProgram);
+
+	glm::mat4 world = glm::mat4(1.0f);
+	world = glm::translate(world, pos);
+	world = glm::scale(world, scale);
+	world = world * glm::toMat4(glm::quat(rot));
+
+	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
+	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+	glUniform3fv(glGetUniformLocation(modelProgram, "lightDir"), 1, glm::value_ptr(lightDir));
+	glUniform3fv(glGetUniformLocation(modelProgram, "camPos"), 1, glm::value_ptr(camPos));
+
+	model->Draw(modelProgram);
 }
 
 void RenderSkybox(glm::mat4 view, glm::mat4 projection) {

@@ -1,12 +1,13 @@
 # Blender 4.0.2 MTL File: 'Aaron_foto_highres_0526210712.blend'
 # www.blender.org
 
-newmtl Material_0
-Ns 39.999996
+newmtl material1
 Ka 1.000000 1.000000 1.000000
-Kd 0.800000 0.800000 0.800000
-Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
-Ni 1.500000
+Ni 1.000000
 d 1.000000
 illum 2
+map_Kd aaron_texture_diffuse.jpg
+map_Ks aaron_texture_specular.png
+map_Ns aaron_texture_roughness.png
+map_Bump aaron_texture_normal.png
