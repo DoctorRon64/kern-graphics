@@ -34,6 +34,10 @@ void clip(float d)
     if (d < 0) discard;   
 }
 
+vec3 rgb(float r, float g, float b) {
+    return vec3(r / 255.0, g / 255.0, b / 255.0);
+}
+
 void main()
 {
     clip(clipDir * (waterHeight - worldPos.y));
@@ -83,13 +87,14 @@ void main()
     vec3 diffuse = lerp(lerp(lerp(lerp(dirtColor, sandColor, ds), grassColor, sg), rockColor, gr), snowColor, rs);
     
     //fog
+    vec3 topColor = rgb(68.0, 118.0, 189.0);
+    vec3 bottomColor = rgb(188.0 , 214.0, 231.0);
     float fog = pow(clamp((dist - 250) / 1500, 0, 1), 2);
-    vec3 topColor = vec3(68.0 / 255.0, 118.0 / 255.0 , 189.0 / 255.0);
-    vec3 bottomColor = vec3(188.0 / 255.0,  214.0 / 255.0, 231.0 / 255.0);
     vec3 fogColor = lerp(bottomColor, topColor, max(viewDir.y, 0.0));
 
     // Final Color Calculation
     vec4 outputCol = vec4(lerp(diffuse * min(lightValue + 0.1, 1.0), fogColor, fog) ,1.0); + spec * outputCol.rgb;
     FragColor = outputCol;
+
     DepthColor = vec4(dist / 100);
 }

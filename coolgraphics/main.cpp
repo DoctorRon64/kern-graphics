@@ -37,7 +37,7 @@ unsigned int loadTexture(const char* path, int comp = 0);
 void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale);
 void RenderCube(glm::mat4 view, glm::mat4 projection);
 void RenderSkybox(glm::mat4 view, glm::mat4 projection);
-void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir = 0);
+void RenderTerrain(glm::mat4 view, glm::mat4 projection, glm::vec3 pos ,int clipDir = 0);
 unsigned int GeneratePlane(const char* heightmap, GLenum format, int comp, unsigned char*& data, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
 void setupRescources();
 
@@ -118,9 +118,11 @@ int main()
 	setupRescources();
 
 	//Lijst van dingen die kapot zijn:
+	// ======================================
 	//Water reflection MOET omhoog
 	//Water glitch nog erg
 	//Textures van de model zijn facked / niet goed gemapt
+	//fog is andere kleur
 
 	/*chromatic abberation*/ 
 	FrameBuffer PostProcess1, PostProcess2, scene;
@@ -226,7 +228,7 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 	camPos = invertPos;
 
 	RenderSkybox(invertView, projection);
-	RenderInvertedTerrain(invertView, projection, glm::vec3(0, 0, 0), -1);
+	RenderTerrain(invertView, projection, glm::vec3(0, 0, 0), -1);
 
 	camPos = temp;
 

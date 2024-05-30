@@ -15,11 +15,15 @@ uniform vec3 lightDir;
 uniform vec3 camPos;
 uniform float time;
 
+vec2 lerp(vec2 a, vec2 b, float t) {
+    return a + (b - a) * t;
+}
+
 vec3 lerp(vec3 a, vec3 b, float t) {
     return a + (b - a) * t;
 }
 
-vec2 lerp(vec2 a, vec2 b, float t) {
+vec4 lerp(vec4 a, vec4 b, float t) {
     return a + (b - a) * t;
 }
 
@@ -74,14 +78,14 @@ void main()
     float spec = pow(max(dot(-refl, viewDir), 0.0), 208);
 
     //calculate fog
+    vec3 topColor = rgb(68.0, 118.0, 189.0);
+    vec3 bottomColor = rgb(188.0 , 214.0, 231.0);
     float dist = length(worldPos.xyz - camPos);
-    float fog = pow(clamp((dist - 500.0) / 1500.0, 0.0, 1.0), 1.0);
-    vec3 topColor = rgb(68.0 , 118.0, 189.0);
-    vec3 bottomColor = rgb(188.0, 214.0, 231.0);
+    float fog = pow(clamp((dist - 250) / 1000, 0, 1),2);
     vec3 fogColor = lerp(bottomColor, topColor, max(viewDir.y, 0.0));
 
     // Output final color
-    vec3 finalColor = lerp(surfaceBlend + vec3(spec), fogColor, fog);
-    FragColor = vec4(finalColor, 1.0);
+    vec4 finalColor = vec4(surfaceBlend + vec3(spec), 1.0);
+    FragColor = lerp(finalColor, vec4(fogColor, 1.0), fog);
     DepthColor = vec4(1.0, 0.0, 0.0, 1.0);
 }
