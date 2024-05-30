@@ -117,6 +117,11 @@ int main()
 	
 	setupRescources();
 
+	//Lijst van dingen die kapot zijn:
+	//Water reflection MOET omhoog
+	//Water glitch nog erg
+	//Textures van de model zijn facked / niet goed gemapt
+
 	/*chromatic abberation*/ 
 	FrameBuffer PostProcess1, PostProcess2, scene;
 	createFrameBuffer(screenWidth, screenHeight, PostProcess1.Id, PostProcess1.color1, PostProcess1.depth);
@@ -140,9 +145,9 @@ int main()
 			glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 			RenderSkybox(view, projection);
-			RenderTerrain(view, projection, 0);
-
-			RenderModel(aaronHead, view, projection, glm::vec3(1000, 500, 1000), glm::vec3(0, glfwGetTime() * 2,0), glm::vec3(100,100,100));
+			RenderTerrain(view, projection, glm::vec3(0,0,0));
+			
+			RenderModel(aaronHead, view, projection, glm::vec3(1000, 500, 1000), glm::vec3(0, glfwGetTime() * 2,0), glm::vec3(500,500,500));
 			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -153,7 +158,7 @@ int main()
 		renderToBuffer(PostProcess1, scene, chromabbProgram);
 		
 		//blit to screen
-		renderToBuffer(screenBuffer, scene, blitProgram);
+		renderToBuffer(screenBuffer, PostProcess1, blitProgram);
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -221,7 +226,7 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 	camPos = invertPos;
 
 	RenderSkybox(invertView, projection);
-	RenderTerrain(invertView, projection, -1);
+	RenderInvertedTerrain(invertView, projection, glm::vec3(0, 0, 0), -1);
 
 	camPos = temp;
 
@@ -281,7 +286,7 @@ void RenderSkybox(glm::mat4 view, glm::mat4 projection) {
 	glEnable(GL_DEPTH);
 }
 
-void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir) {
+void RenderTerrain(glm::mat4 view, glm::mat4 projection,glm::vec3 pos ,int clipDir) {
 	glUseProgram(terrainProgram);
 
 	glEnable(GL_DEPTH);
@@ -290,7 +295,7 @@ void RenderTerrain(glm::mat4 view, glm::mat4 projection, int clipDir) {
 	glCullFace(GL_BACK);
 
 	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::translate(world, glm::vec3(0, 0, 0));
+	world = glm::translate(world, pos);
 
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
