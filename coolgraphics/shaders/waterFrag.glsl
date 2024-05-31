@@ -49,9 +49,9 @@ void main()
     float deepness = sceneDepth - depthValue;
 
     vec2 waterUv1 = vec2(worldPos.x * 14.1 + time * .25, worldPos.z * -24.0 + time * .58);
-    vec2 waterUv2 = vec2(worldPos.x * 17.0 + time * .35, worldPos.z * 14.0 + time * .23);
-    vec2 waterUv3 = vec2(worldPos.x * 10.3 + time * .45, worldPos.z * 14.0 + time * .32);
-    vec2 waterUv4 = vec2(worldPos.x * 25.0 + time * .55, worldPos.z * 14.0 + time * .25);
+    vec2 waterUv2 = vec2(worldPos.x * 17.0 + time * .35, worldPos.z * 14.1 + time * .23);
+    vec2 waterUv3 = vec2(worldPos.x * 10.3 + time * .45, worldPos.z * 12.0 + time * .32);
+    vec2 waterUv4 = vec2(worldPos.x * 25.0 + time * .55, worldPos.z * -7.3 + time * .25);
 
     // Calculate normal stuff
     vec2 normal;
@@ -60,7 +60,7 @@ void main()
     normal += texture(normalMap, waterUv3).rg * 2.0 - 1.0;
     normal += texture(normalMap, waterUv4).rg * 2.0 - 1.0;
     normal /= 4.0; //< -- hoeveel heid ingelezen
-    normal *= 0.1 * edgy * min(deepness, 1.0);
+    normal *= 0.01 * edgy * min(deepness, 1.0);
 
     vec3 uvColor = texture(color, screenUV + normal).rgb;
     uvColor = lerp(uvColor, waterColor, min(deepness * 4, 1.0));
@@ -75,17 +75,19 @@ void main()
     vec3 reflNormal = vec3(0, 1, 0);
     reflNormal.rg += normal;
     vec3 refl = reflect(lightDir, normalize(reflNormal));
-    float spec = pow(max(dot(-refl, viewDir), 0.0), 208);
+    float spec = pow(max(dot(-refl, viewDir), 0.0), 200);
 
     //calculate fog
     vec3 topColor = rgb(68.0, 118.0, 189.0);
     vec3 bottomColor = rgb(188.0 , 214.0, 231.0);
     float dist = length(worldPos.xyz - camPos);
-    float fog = pow(clamp((dist - 250) / 1000, 0, 1),2);
+    float fog = pow(clamp((dist - 250) / 1500, 0, 1),2);
     vec3 fogColor = lerp(bottomColor, topColor, max(viewDir.y, 0.0));
 
     // Output final color
     vec4 finalColor = vec4(surfaceBlend + vec3(spec), 1.0);
+    //FragColor = texture(invert, invertUv);
     FragColor = lerp(finalColor, vec4(fogColor, 1.0), fog);
+    
     DepthColor = vec4(1.0, 0.0, 0.0, 1.0);
 }

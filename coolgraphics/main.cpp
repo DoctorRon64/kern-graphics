@@ -91,6 +91,8 @@ bool keys[1024];
 unsigned int terrainVAO, terrainIndexCount, heightMapId, heightNormalId;
 unsigned char* heightMapTexture;
 unsigned int dirt, sand, grass, rock, snow;
+float terrainHeight = 100.0f;
+float terrainWidth = 5.0f;
 
 Model* aaronHead;
 
@@ -116,13 +118,6 @@ int main()
 	stbi_set_flip_vertically_on_load(true);
 	
 	setupRescources();
-
-	//Lijst van dingen die kapot zijn:
-	// ======================================
-	//Water reflection MOET omhoog
-	//Water glitch nog erg
-	//Textures van de model zijn facked / niet goed gemapt
-	//fog is andere kleur
 
 	/*chromatic abberation*/ 
 	FrameBuffer PostProcess1, PostProcess2, scene;
@@ -212,10 +207,10 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 {
 	//create inverted viewMatrix
 	glm::vec3 invertPos = camPos;
-	invertPos.y = -(invertPos.y + waterHeight * 2);
+	invertPos.y =  -invertPos.y + waterHeight * 2;
 	glm::vec3 invertUp = glm::reflect(camUp, glm::vec3(0, 1, 0));
 	glm::vec3 invertTarget = camPos + camFor;
-	invertTarget.y = -(invertTarget.y + waterHeight * 2);
+	invertTarget.y = -invertTarget.y + waterHeight * 2;
 
 	glm::mat4 invertView = glm::lookAt(invertPos, invertTarget, invertUp);
 
@@ -240,7 +235,16 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 /// </summary>
 void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale)
 {
+	//glEnable(GL_BLEND);
+	//alpha
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//additive blend
+	//glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ONE);
+	//multiply blend
+	//glBlendFunc(GL_DST_COLOR, GL_ZERO);
+
 	glEnable(GL_DEPTH);
+	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 
@@ -259,6 +263,8 @@ void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 p
 	glUniform3fv(glGetUniformLocation(modelProgram, "camPos"), 1, glm::value_ptr(camPos));
 
 	model->Draw(modelProgram);
+
+	//glDisable(GL_BLEND);
 }
 
 void RenderSkybox(glm::mat4 view, glm::mat4 projection) {

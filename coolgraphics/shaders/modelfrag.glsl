@@ -54,6 +54,7 @@ void main()
     float fog = pow(clamp((dist - 250) / 1000, 0, 1),2);
     vec3 fogColor = lerp(bottomColor, topColor, max(viewDir.y, 0.0));
     
-    vec4 finalOutput = diffuse * max(light * ambientOcclusion, 0.2 * ambientOcclusion) + vec4(specular, 0);
-    FragColor = lerp(finalOutput, vec4(fogColor, 1.0), fog);
+    vec4 finalOutput = lerp(diffuse * max(light * ambientOcclusion, 0.2 * ambientOcclusion) + vec4(specular, 0), vec4(fogColor, 1.0), fog);
+    //if (finalOutput.a < 0.5) discard; //alpha clipping
+    FragColor = finalOutput;
 }
