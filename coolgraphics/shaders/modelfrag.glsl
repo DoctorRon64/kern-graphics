@@ -5,11 +5,11 @@ in vec2 TexCoords;
 in vec3 Normals;
 in vec4 FragPos;
 
-uniform sampler2D texture_diffuse;
-uniform sampler2D texture_specular;
-uniform sampler2D texture_normal;
-uniform sampler2D texture_roughness;
-uniform sampler2D texture_ao;
+uniform sampler2D texture_diffuse1;
+uniform sampler2D texture_specular1;
+uniform sampler2D texture_normal1;
+uniform sampler2D texture_roughness1;
+uniform sampler2D texture_ao1;
 
 uniform vec3 camPos;
 uniform vec3 lightDir;
@@ -32,17 +32,17 @@ vec3 rgb(float r, float g, float b) {
 
 void main()
 {
-    vec4 diffuse = texture(texture_diffuse, TexCoords);
-    vec4 specTex = texture(texture_specular, TexCoords);
+    vec4 diffuse = 1 - texture(texture_diffuse1, TexCoords);
+    vec4 specTex = texture(texture_specular1, TexCoords);
 
     float light = max(dot(-lightDir, Normals), 0.0);
 
     vec3 viewDir = normalize(FragPos.rgb - camPos);
     vec3 refl = reflect(lightDir, Normals);
 
-    float ambientOcclusion = texture(texture_ao, TexCoords).r;
+    float ambientOcclusion = texture(texture_ao1, TexCoords).r;
     
-    float roughness = texture(texture_roughness, TexCoords).r;
+    float roughness = texture(texture_roughness1, TexCoords).r;
     float spec = pow(max(dot(-viewDir, refl), 0.0), lerp(1, 128, roughness));
     vec3 specular = spec * specTex.rgb;
 

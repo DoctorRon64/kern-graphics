@@ -190,14 +190,14 @@ void setupRescources() {
 	CreateShader(chromabbProgram, "shaders/pp/chrabb_vert.glsl", "shaders/pp/chrabb_frag.glsl");
 	CreateShader(blitProgram, "shaders/pp/img_vert.glsl", "shaders/pp/img_frag.glsl");
 	CreateShader(waterProgram, "shaders/waterVert.glsl", "shaders/waterFrag.glsl");
-	CreateShader(modelProgram, "shaders/modelvert.glsl", "shaders/modelfrag.glsl");
+	CreateShader(modelProgram, "shaders/modelvert.glsl", "shaders/model2frag.glsl");
 
 	glUseProgram(modelProgram);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_diffuse"), 0);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_specular"), 1);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_normal"), 2);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_roughness"), 3);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_ao"), 4);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_diffuse1"), 0);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_specular1"), 1);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_normal1"), 2);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_roughness1"), 3);
+	glUniform1i(glGetUniformLocation(modelProgram, "texture_ao1"), 4);
 	
 	glUseProgram(blitProgram);
 	glUseProgram(chromabbProgram);
