@@ -94,7 +94,10 @@ unsigned int dirt, sand, grass, rock, snow;
 float terrainHeight = 100.0f;
 float terrainWidth = 5.0f;
 
+Model* Guitar;
 Model* aaronHead;
+Model* boat;
+Model* lighthouse;
 
 unsigned int defaultAttach[1] = { GL_COLOR_ATTACHMENT0 };
 unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
@@ -144,7 +147,11 @@ int main()
 			RenderSkybox(view, projection);
 			RenderTerrain(view, projection, glm::vec3(0,0,0));
 			
+			RenderModel(Guitar, view, projection, glm::vec3(0, 100, 0), glm::vec3(0, 90, 0), glm::vec3(10, 10, 10));
 			RenderModel(aaronHead, view, projection, glm::vec3(1000, 500, 1000), glm::vec3(0, glfwGetTime() * 2,0), glm::vec3(500,500,500));
+			RenderModel(boat, view, projection, glm::vec3(430, 10.5, 620), glm::vec3(0,90,0), glm::vec3(.2, .2, .2));
+			RenderModel(lighthouse, view, projection, glm::vec3(632, 30, 1038), glm::vec3(0, 90, 0), glm::vec3(3, 3, 3));
+
 			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -183,6 +190,9 @@ void setupRescources() {
 	snow = loadTexture("textures/terrain/snow.jpg");
 
 	aaronHead = new Model("models/aaron/aaron_model.obj");
+	boat = new Model("models/boat/Boat.obj");
+	lighthouse = new Model("models/lighthouse/LightHouse.obj");
+	Guitar = new Model("models/backpack/backpack.obj");
 
 	CreateShader(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
 	CreateShader(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
