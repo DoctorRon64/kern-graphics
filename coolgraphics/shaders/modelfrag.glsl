@@ -11,6 +11,9 @@ uniform sampler2D texture_normal1;
 uniform sampler2D texture_roughness1;
 uniform sampler2D texture_ao1;
 
+uniform float waterHeight;
+uniform int clipDir;
+
 uniform vec3 camPos;
 uniform vec3 lightDir;
 
@@ -30,8 +33,15 @@ vec3 rgb(float r, float g, float b) {
     return vec3(r / 255.0, g / 255.0, b / 255.0);
 }
 
+void clip(float d) 
+{
+    if (d < 0) discard;   
+}
+
 void main()
 {
+    clip(clipDir * (waterHeight - FragPos.y));
+
     vec4 diffuse = 1 - texture(texture_diffuse1, TexCoords);
     vec4 specTex = texture(texture_specular1, TexCoords);
 

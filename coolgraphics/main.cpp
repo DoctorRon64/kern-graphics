@@ -34,7 +34,7 @@ int init(GLFWwindow*& window, int width, int height);
 void CreateShader(unsigned int& programId, const char* vertex, const char* fragment);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path, int comp = 0);
-void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale);
+void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale, int clipDir = 0);
 void RenderCube(glm::mat4 view, glm::mat4 projection);
 void RenderSkybox(glm::mat4 view, glm::mat4 projection);
 void RenderTerrain(glm::mat4 view, glm::mat4 projection, glm::vec3 pos ,int clipDir = 0);
@@ -48,7 +48,7 @@ void renderToBuffer(FrameBuffer To, FrameBuffer From, unsigned int shader);
 void renderQuad();
 
 //waterRendering
-void renderInvertedScene(glm::mat4 projection, FrameBuffer target);
+void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer);
 void renderWaterPlane(glm::mat4 projection, glm::mat4 view, FrameBuffer target, FrameBuffer InvertSource);
 
 //util
@@ -118,8 +118,6 @@ int main()
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
 
-	stbi_set_flip_vertically_on_load(true);
-	
 	setupRescources();
 
 	/*chromatic abberation*/ 
@@ -147,15 +145,14 @@ int main()
 			RenderSkybox(view, projection);
 			RenderTerrain(view, projection, glm::vec3(0,0,0));
 			
-			RenderModel(Guitar, view, projection, glm::vec3(0, 100, 0), glm::vec3(0, 90, 0), glm::vec3(10, 10, 10));
 			RenderModel(aaronHead, view, projection, glm::vec3(1000, 500, 1000), glm::vec3(0, glfwGetTime() * 2,0), glm::vec3(500,500,500));
-			RenderModel(boat, view, projection, glm::vec3(430, 10.5, 620), glm::vec3(0,90,0), glm::vec3(.2, .2, .2));
-			RenderModel(lighthouse, view, projection, glm::vec3(632, 30, 1038), glm::vec3(0, 90, 0), glm::vec3(3, 3, 3));
+			RenderModel(boat, view, projection, glm::vec3(1300, 10.5, 200), glm::vec3(0,-90,0), glm::vec3(.2, .2, .2));
+			RenderModel(lighthouse, view, projection, glm::vec3(1050, 30, 290), glm::vec3(0, 90, 0), glm::vec3(3, 3, 3));
 
 			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		renderInvertedScene(projection, PostProcess1);
+		renderInvertedScene(projection ,PostProcess1);
 		renderWaterPlane(projection, view, scene, PostProcess1);
 
 		//post processing
@@ -199,8 +196,8 @@ void setupRescources() {
 	CreateShader(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
 	CreateShader(chromabbProgram, "shaders/pp/chrabb_vert.glsl", "shaders/pp/chrabb_frag.glsl");
 	CreateShader(blitProgram, "shaders/pp/img_vert.glsl", "shaders/pp/img_frag.glsl");
-	CreateShader(waterProgram, "shaders/waterVert.glsl", "shaders/waterFrag.glsl");
 	CreateShader(modelProgram, "shaders/modelvert.glsl", "shaders/model2frag.glsl");
+	CreateShader(waterProgram, "shaders/waterVert.glsl", "shaders/waterFrag.glsl");
 
 	glUseProgram(modelProgram);
 	glUniform1i(glGetUniformLocation(modelProgram, "texture_diffuse1"), 0);
@@ -232,8 +229,13 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 	glm::vec3 temp = camPos;
 	camPos = invertPos;
 
+	int clipdir = -1;
+
 	RenderSkybox(invertView, projection);
-	RenderTerrain(invertView, projection, glm::vec3(0, 0, 0), -1);
+	RenderModel(boat, invertView, projection, glm::vec3(1300, 10.5, 200), glm::vec3(0, -90, 0), glm::vec3(.2, .2, .2), clipdir);
+	RenderModel(lighthouse, invertView, projection, glm::vec3(1050, 30, 290), glm::vec3(0, 90, 0), glm::vec3(3, 3, 3), clipdir);
+
+	RenderTerrain(invertView, projection, glm::vec3(0, 0, 0), clipdir);
 
 	camPos = temp;
 
@@ -243,7 +245,7 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 /// <summary>
 /// RENDERING STUFFFFFFFFFFFFF
 /// </summary>
-void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale)
+void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale, int clipDir)
 {
 	//glEnable(GL_BLEND);
 	//alpha
@@ -268,6 +270,9 @@ void RenderModel(Model* model, glm::mat4 view, glm::mat4 projection, glm::vec3 p
 	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+	glUniform1f(glGetUniformLocation(modelProgram, "waterHeight"), waterHeight);
+	glUniform1i(glGetUniformLocation(modelProgram, "clipDir"), clipDir);
 
 	glUniform3fv(glGetUniformLocation(modelProgram, "lightDir"), 1, glm::value_ptr(lightDir));
 	glUniform3fv(glGetUniformLocation(modelProgram, "camPos"), 1, glm::value_ptr(camPos));
