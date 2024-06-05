@@ -21,6 +21,7 @@ void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path);
+glm::vec4 GetRandomColor();
 
 //util
 void loadFile(const char* fileName, char*& output);
@@ -87,6 +88,8 @@ int main()
 
 		glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
 		glUniform3fv(glGetUniformLocation(shaderProgram, "camPos"), 1, glm::value_ptr(camPos));
+		glm::vec4 lightColor = GetRandomColor(); //color of the light
+		glUniform4fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, glm::value_ptr(lightColor));
 
 		//set texture channels
 		glUniform1i(glGetUniformLocation(shaderProgram, "mainTexture"), 0);
@@ -143,6 +146,25 @@ int init(GLFWwindow*& window) {
 	}
 
 	return 0;
+}
+
+glm::vec4 GetRandomColor()
+{
+	static float hue = 0.0f;
+	hue += 0.01f;  // Adjust the speed of the color change
+
+	if (hue > 1.0f)
+		hue -= 1.0f;
+
+	float r = abs(hue * 6.0f - 3.0f) - 1.0f;
+	float g = 2.0f - abs(hue * 6.0f - 2.0f);
+	float b = 2.0f - abs(hue * 6.0f - 4.0f);
+
+	r = glm::clamp(r, 0.0f, 1.0f);
+	g = glm::clamp(g, 0.0f, 1.0f);
+	b = glm::clamp(b, 0.0f, 1.0f);
+
+	return glm::vec4(r, g, b, 1.0f);
 }
 
 void CreateGeometry(unsigned int& VAO, unsigned int &EBO ,int& size, int& numIndices)

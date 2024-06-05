@@ -11,6 +11,7 @@ uniform sampler2D normalMap;
 
 uniform vec3 lightPos;
 uniform vec3 camPos;
+uniform vec4 lightColor;  // New uniform for light color
 
 void main()
 {
@@ -33,5 +34,6 @@ void main()
     // Color
     vec4 clrOutput = vec4(color, 1.0f) * texture(mainTexture, uv);
     clrOutput.rgb = clrOutput.rgb * min(lightValue + 0.1f, 1.0f) + spec * clrOutput.rgb;
+    clrOutput.rgb *= lightColor.rgb;
     FragColor = clrOutput;
 }
