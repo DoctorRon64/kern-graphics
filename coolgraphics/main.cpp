@@ -21,7 +21,7 @@ void CreateShaders();
 void CreateProgram(unsigned int& programId, const char* vertexSrc, const char* fragmentSrc);
 void CreateGeometry(unsigned int& VAO, unsigned int& EBO, int& size, int& numIndices);
 unsigned int loadTexture(const char* path);
-glm::vec4 GetRandomColor();
+glm::vec4 GetRandomColor(float deltaTime);
 
 //util
 void loadFile(const char* fileName, char*& output);
@@ -68,11 +68,18 @@ int main()
 	glm::mat4 view = glm::lookAt(camPos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 	glm::mat4 projection = glm::perspective(glm::radians(FOV), screenWidth / (float)screenHeight, 0.1f, 100.0f);
 
+	float deltaTime;
+	float lastFrame = glfwGetTime();
+
 	// Game render loop
 	while (!glfwWindowShouldClose(window)) {
 
 		// Input handling
 		processInput(window);
+
+		float currentFrame = glfwGetTime();
+		deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
 
 		// Rendering
 		glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
@@ -88,7 +95,8 @@ int main()
 
 		glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
 		glUniform3fv(glGetUniformLocation(shaderProgram, "camPos"), 1, glm::value_ptr(camPos));
-		glm::vec4 lightColor = GetRandomColor(); //color of the light
+
+		glm::vec4 lightColor = GetRandomColor(deltaTime); //color of the light
 		glUniform4fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, glm::value_ptr(lightColor));
 
 		//set texture channels
@@ -148,10 +156,12 @@ int init(GLFWwindow*& window) {
 	return 0;
 }
 
-glm::vec4 GetRandomColor()
+glm::vec4 GetRandomColor(float deltaTime)
 {
 	static float hue = 0.0f;
-	hue += 0.01f;  // Adjust the speed of the color change
+	static const float speed = 0.1f;
+
+	hue += deltaTime * speed;
 
 	if (hue > 1.0f)
 		hue -= 1.0f;
