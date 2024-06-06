@@ -42,7 +42,7 @@ void main()
 {
     clip(clipDir * (waterHeight - FragPos.y));
 
-    vec4 diffuse = 1 - texture(texture_diffuse1, TexCoords);
+    vec4 diffuse = texture(texture_diffuse1, TexCoords);
     vec4 specTex = texture(texture_specular1, TexCoords);
 
     float light = max(dot(-lightDir, Normals), 0.0);

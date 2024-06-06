@@ -98,6 +98,8 @@ Model* Guitar;
 Model* aaronHead;
 Model* boat;
 Model* lighthouse;
+Model* japantemple;
+Model* japanman;
 
 unsigned int defaultAttach[1] = { GL_COLOR_ATTACHMENT0 };
 unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
@@ -145,9 +147,11 @@ int main()
 			RenderSkybox(view, projection);
 			RenderTerrain(view, projection, glm::vec3(0,0,0));
 			
-			RenderModel(aaronHead, view, projection, glm::vec3(1000, 500, 1000), glm::vec3(0, glfwGetTime() * 2,0), glm::vec3(500,500,500));
+			RenderModel(aaronHead, view, projection, glm::vec3(0, 500, 1000), glm::vec3(0, glfwGetTime() * 2,0), glm::vec3(200,200,200));
 			RenderModel(boat, view, projection, glm::vec3(1300, 10.5, 200), glm::vec3(0,-90,0), glm::vec3(.2, .2, .2));
 			RenderModel(lighthouse, view, projection, glm::vec3(1050, 30, 290), glm::vec3(0, 90, 0), glm::vec3(3, 3, 3));
+			RenderModel(japantemple, view, projection, glm::vec3(1000, 55, 1250), glm::vec3(0, -180, 0), glm::vec3(10, 10, 10));
+			RenderModel(japanman, view, projection, glm::vec3(1050, 60, 1050), glm::vec3(0, 0, 0), glm::vec3(5, 5, 5));
 
 			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -190,13 +194,15 @@ void setupRescources() {
 	boat = new Model("models/boat/Boat.obj");
 	lighthouse = new Model("models/lighthouse/LightHouse.obj");
 	Guitar = new Model("models/backpack/backpack.obj");
-
+	japantemple = new Model("models/japanese_temple/Japanese_Temple.obj");
+	japanman = new Model("models/man/man.obj");
+	
 	CreateShader(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
 	CreateShader(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
 	CreateShader(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
 	CreateShader(chromabbProgram, "shaders/pp/chrabb_vert.glsl", "shaders/pp/chrabb_frag.glsl");
 	CreateShader(blitProgram, "shaders/pp/img_vert.glsl", "shaders/pp/img_frag.glsl");
-	CreateShader(modelProgram, "shaders/modelvert.glsl", "shaders/model2frag.glsl");
+	CreateShader(modelProgram, "shaders/modelvert.glsl", "shaders/modelfrag.glsl");
 	CreateShader(waterProgram, "shaders/waterVert.glsl", "shaders/waterFrag.glsl");
 
 	glUseProgram(modelProgram);
