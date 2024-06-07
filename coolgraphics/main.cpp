@@ -100,6 +100,7 @@ Model* boat;
 Model* lighthouse;
 Model* japantemple;
 Model* japanman;
+Model* lantern;
 
 unsigned int defaultAttach[1] = { GL_COLOR_ATTACHMENT0 };
 unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
@@ -151,7 +152,10 @@ int main()
 			RenderModel(boat, view, projection, glm::vec3(1300, 10.5, 200), glm::vec3(0,-90,0), glm::vec3(.2, .2, .2));
 			RenderModel(lighthouse, view, projection, glm::vec3(1050, 30, 290), glm::vec3(0, 90, 0), glm::vec3(3, 3, 3));
 			RenderModel(japantemple, view, projection, glm::vec3(1000, 55, 1250), glm::vec3(0, -180, 0), glm::vec3(10, 10, 10));
-			RenderModel(japanman, view, projection, glm::vec3(1050, 60, 1050), glm::vec3(0, 0, 0), glm::vec3(5, 5, 5));
+			RenderModel(japanman, view, projection, glm::vec3(1350, 93, 850), glm::vec3(0, -90, 0), glm::vec3(5, 5, 5));
+			RenderModel(lantern, view, projection, glm::vec3(1050, 60, 1050), glm::vec3(300, 0, 0), glm::vec3(2, 2, 2));
+			RenderModel(lantern, view, projection, glm::vec3(1350, 65, 950), glm::vec3(300, 23, 0), glm::vec3(2, 2, 2));
+			RenderModel(lantern, view, projection, glm::vec3(1000, 50, 590), glm::vec3(300, 0, 0), glm::vec3(2, 2, 2));
 
 			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -196,7 +200,8 @@ void setupRescources() {
 	Guitar = new Model("models/backpack/backpack.obj");
 	japantemple = new Model("models/japanese_temple/Japanese_Temple.obj");
 	japanman = new Model("models/man/man.obj");
-	
+	lantern = new Model("models/lantern/lantern.obj");
+
 	CreateShader(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
 	CreateShader(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
 	CreateShader(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
@@ -240,6 +245,7 @@ void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer)
 	RenderSkybox(invertView, projection);
 	RenderModel(boat, invertView, projection, glm::vec3(1300, 10.5, 200), glm::vec3(0, -90, 0), glm::vec3(.2, .2, .2), clipdir);
 	RenderModel(lighthouse, invertView, projection, glm::vec3(1050, 30, 290), glm::vec3(0, 90, 0), glm::vec3(3, 3, 3), clipdir);
+	RenderModel(japantemple, invertView, projection, glm::vec3(1000, 55, 1250), glm::vec3(0, -180, 0), glm::vec3(10, 10, 10));
 
 	RenderTerrain(invertView, projection, glm::vec3(0, 0, 0), clipdir);
 
