@@ -198,7 +198,7 @@ void setupRescources() {
 	boat = new Model("models/boat/Boat.obj");
 	lighthouse = new Model("models/lighthouse/LightHouse.obj");
 	Guitar = new Model("models/backpack/backpack.obj");
-	japantemple = new Model("models/japanese_temple/Japanese_Temple.obj");
+	japantemple = new Model("models/japanese_temple/japanese temple.obj");
 	japanman = new Model("models/man/man.obj");
 	lantern = new Model("models/lantern/lantern.obj");
 
