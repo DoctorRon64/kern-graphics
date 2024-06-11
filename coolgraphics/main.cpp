@@ -63,7 +63,8 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 /////////////////////////////////////////////////////////////////////////
 
 // Program ID
-unsigned int shaderProgram, skyProgram, terrainProgram, chromabbProgram, blitProgram, waterProgram, modelProgram;
+unsigned int shaderProgram, skyProgram, terrainProgram, waterProgram, modelProgram;
+unsigned int chromabbProgram, blitProgram;
 unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
@@ -141,10 +142,12 @@ int main()
 		view = glm::lookAt(camPos, camPos + camFor, camUp);
 
 		//render scene
-		glBindFramebuffer(GL_FRAMEBUFFER, scene.Id);
+		glBindFramebuffer(GL_FRAMEBUFFER, scene.Id /*hdr buffer*/ );
 		glDrawBuffers(2, sceneAttach);
 			glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+
 			RenderSkybox(view, projection);
 			RenderTerrain(view, projection, glm::vec3(0,0,0));
 			
@@ -202,13 +205,13 @@ void setupRescources() {
 	japanman = new Model("models/man/man.obj");
 	lantern = new Model("models/lantern/lantern.obj");
 
-	CreateShader(shaderProgram, "shaders/defaultvertex.glsl", "shaders/defaultfragment.glsl");
-	CreateShader(skyProgram, "shaders/skyvertex.glsl", "shaders/skyfrag.glsl");
-	CreateShader(terrainProgram, "shaders/terrainvertex.glsl", "shaders/terrainfrag.glsl");
+	CreateShader(shaderProgram, "shaders/default_vert.glsl", "shaders/default_frag.glsl");
+	CreateShader(skyProgram, "shaders/sky_vert.glsl", "shaders/sky_frag.glsl");
+	CreateShader(terrainProgram, "shaders/terrain_vert.glsl", "shaders/terrain_frag.glsl");
 	CreateShader(chromabbProgram, "shaders/pp/chrabb_vert.glsl", "shaders/pp/chrabb_frag.glsl");
 	CreateShader(blitProgram, "shaders/pp/img_vert.glsl", "shaders/pp/img_frag.glsl");
-	CreateShader(modelProgram, "shaders/modelvert.glsl", "shaders/modelfrag.glsl");
-	CreateShader(waterProgram, "shaders/waterVert.glsl", "shaders/waterFrag.glsl");
+	CreateShader(modelProgram, "shaders/model_vert.glsl", "shaders/model_frag.glsl");
+	CreateShader(waterProgram, "shaders/water_vert.glsl", "shaders/water_frag.glsl");
 
 	glUseProgram(modelProgram);
 	glUniform1i(glGetUniformLocation(modelProgram, "texture_diffuse1"), 0);
