@@ -44,10 +44,11 @@ void setupRescources();
 //postFX
 void createFrameBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& depthBufferId);
 void createFrameBufferColor(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2);
-void createBlur(int width, int height, unsigned int& colorBuffer1);
+unsigned int renderBlur(unsigned int& colorBuffer1);
 void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2, unsigned int& depthBufferId);
 void renderToBuffer(FrameBuffer To, FrameBuffer From, unsigned int shader);
-void renderToScreen(unsigned int* framebuffers, int numFramebuffers);
+void renderToScreen(unsigned int* framebuffers);
+void createPingPongBuffer(int width, int height);
 void renderQuad();
 
 //waterRendering
@@ -68,8 +69,8 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 // Program ID
 unsigned int shaderProgram, skyProgram, terrainProgram, waterProgram, modelProgram;
 unsigned int chromabbProgram, bloomProgram, blitProgram, gaussianBlurProgram, PostProcessingProgram;
-unsigned int screenWidth = 1200;
-unsigned int screenHeight = 800;
+unsigned int screenWidth = 1400;
+unsigned int screenHeight = 1000;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
 glm::vec3 camPos = glm::vec3(900, 500, 900);
@@ -112,6 +113,9 @@ unsigned int sceneAttach[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 float waterHeight = 25.0f;
 unsigned int waterNormalId;
 
+unsigned int pingpongFBO[2];
+unsigned int pingpongBuffer[2];
+
 /// <summary>////////////////
 /// Functions/
 /// </summary>////////////////
@@ -128,13 +132,12 @@ int main()
 	/*chromatic abberation*/
 	FrameBuffer PostPChrabb, PostPBloom, GaussianBlur ,scene;
 	createFrameBuffer(screenWidth, screenHeight, PostPChrabb.Id, PostPChrabb.color1, PostPChrabb.depth);
-	createFrameBufferColor(screenWidth, screenHeight, PostPBloom.Id, PostPBloom.color1, PostPBloom.color2);
-	createBlur(screenWidth, screenHeight, GaussianBlur.color1);
+	createFrameBuffer(screenWidth, screenHeight, PostPBloom.Id, PostPBloom.color1, PostPBloom.depth);
 	createSceneBuffer(screenWidth, screenHeight, scene.Id, scene.color1, scene.color2, scene.depth);
-
+	createPingPongBuffer(screenWidth, screenHeight);
 	setupRescources();
 
-	unsigned int framebuffers[2] = { PostPChrabb.color1, PostPBloom.color1 };
+	unsigned int framebuffers[2] = { PostPChrabb.color1, GaussianBlur.color1 };
 
 	glm::mat4 view;
 	glm::mat4 projection;
@@ -168,21 +171,19 @@ int main()
 			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+		glDrawBuffers(1, defaultAttach);
+
 		renderInvertedScene(projection, PostPChrabb);
 		renderWaterPlane(projection, view, scene, PostPChrabb);
 
-		//postBloom = screen - chroma - bloom
-		//GaussianBlur = postBloom blurred 
-		//GaussianBlur = add screens
-
 		//Post Fx
 		/*Apply chromatic aberration*/ renderToBuffer(PostPChrabb, scene, chromabbProgram);
-		/*Apply Bloom*/	renderToBuffer(PostPBloom, PostPChrabb, bloomProgram);
-		/*Apply Gaussian blur */ renderToBuffer(GaussianBlur, PostPBloom, gaussianBlurProgram);
-		/*Combine and render to screen*/ renderToScreen(framebuffers, 2);
-
-		//blit to screen
-		// renderToBuffer(screenBuffer, scene, PostProcessingProgram);
+		/*Apply Bloom*/				   renderToBuffer(PostPBloom, PostPChrabb, bloomProgram);
+		/*Apply Gaussian blur */	   GaussianBlur.color1 = renderBlur(PostPBloom.color1);
+		framebuffers[0] = PostPChrabb.color1;
+		framebuffers[1] = GaussianBlur.color1;
+		/*Combine and render  screen*/ renderToScreen(framebuffers);
+		//renderToBuffer(screenBuffer, GaussianBlur, blitProgram);
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -235,7 +236,6 @@ void setupRescources() {
 	CreateShader(gaussianBlurProgram, "shaders/pp/pp_vert.glsl", "shaders/pp/gaussian_blur_frag.glsl");
 	glUseProgram(gaussianBlurProgram);
 	glUniform1i(glGetUniformLocation(gaussianBlurProgram, "image"), 0);
-	glUniform1i(glGetUniformLocation(gaussianBlurProgram, "image2"), 1);
 
 	CreateShader(PostProcessingProgram, "shaders/pp/pp_add_vert.glsl", "shaders/pp/pp_add_frag.glsl");
 	glUseProgram(PostProcessingProgram);
@@ -979,25 +979,25 @@ void createFrameBufferColor(int width, int height, unsigned int& frameBufferId, 
 
 	// Bind and configure the first color buffer
 	glBindTexture(GL_TEXTURE_2D, colorBufferId);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	// Attach texture to framebuffer
-	glFramebufferTexture2D(	GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorBufferId, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorBufferId, 0);
 
 	// Bind and configure the second color buffer
-	glBindTexture(GL_TEXTURE_2D, colorBufferId2);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	//glBindTexture(GL_TEXTURE_2D, colorBufferId2);
+	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	// Attach texture to framebuffer
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, colorBufferId2, 0);
+	//// Attach texture to framebuffer
+	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, colorBufferId2, 0);
 
 	// Check framebuffer completeness
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -1044,28 +1044,25 @@ void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsig
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void createBlur(int width, int height, unsigned int& colorBuffer1) {
-	unsigned int pingpongFBO[2];
-	unsigned int pingpongBuffer[2];
+void createPingPongBuffer(int width, int height) {
 	glGenFramebuffers(2, pingpongFBO);
 	glGenTextures(2, pingpongBuffer);
 	for (unsigned int i = 0; i < 2; i++)
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
 		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[i]);
-		glTexImage2D(
-			GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL
-		);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glFramebufferTexture2D(
-			GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0
-		);
+		glFramebufferTexture2D(	GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0);
 	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+ unsigned int renderBlur(unsigned int& colorBuffer1) {
 	bool horizontal = true, first_iteration = true;
 	unsigned int amount = 10;
 	glUseProgram(gaussianBlurProgram);
@@ -1073,15 +1070,16 @@ void createBlur(int width, int height, unsigned int& colorBuffer1) {
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 		glUniform1i(glGetUniformLocation(gaussianBlurProgram, "horizontal"), horizontal);
-		glBindTexture(
-			GL_TEXTURE_2D, first_iteration ? colorBuffer1 : pingpongBuffer[!horizontal]
-		);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, first_iteration ? colorBuffer1 : pingpongBuffer[!horizontal]);
 		renderQuad();
 		horizontal = !horizontal;
 		if (first_iteration)
 			first_iteration = false;
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	return pingpongBuffer[horizontal];
 }
 
 void renderToBuffer(FrameBuffer To, FrameBuffer From, unsigned int shader) {
@@ -1134,18 +1132,20 @@ void renderQuad()
 	glBindVertexArray(0);
 }
 
-void renderToScreen(unsigned int* framebuffers, int numFramebuffers) {
+void renderToScreen(unsigned int* framebuffers) {
 	glBindFramebuffer(GL_FRAMEBUFFER, screenBuffer.Id);
-
 	glUseProgram(PostProcessingProgram);
 
-	for (int i = 0; i < numFramebuffers; i++) {
-		glUniform1i(glGetUniformLocation(PostProcessingProgram, ("framebuffers[" + std::to_string(i) + "]").c_str()), i);
-		glActiveTexture(GL_TEXTURE0 + i);
-		glBindTexture(GL_TEXTURE_2D, framebuffers[i]);
-	}
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glUniform1i(glGetUniformLocation(PostProcessingProgram, "numFramebuffers"), numFramebuffers);
+	glUniform1i(glGetUniformLocation(PostProcessingProgram, "frameBuffer1"), 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, framebuffers[0]);
+
+	glUniform1i(glGetUniformLocation(PostProcessingProgram, "frameBuffer2"), 1);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, framebuffers[1]);
 
 	renderQuad();
 }
