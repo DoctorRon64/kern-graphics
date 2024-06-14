@@ -86,7 +86,7 @@ void main()
 
     // Output final color
     vec4 finalColor = vec4(surfaceBlend + vec3(spec), 1.0);
-    FragColor = texture(invert, invertUv);
-    //FragColor = lerp(finalColor, vec4(fogColor, 1.0), fog);
+    //FragColor = texture(invert, invertUv);
+    FragColor = lerp(finalColor, vec4(fogColor, 1.0), fog);
     DepthColor = vec4(1.0, 0.0, 0.0, 1.0);
 }

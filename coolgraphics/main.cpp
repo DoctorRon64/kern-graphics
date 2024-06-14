@@ -43,13 +43,15 @@ void setupRescources();
 
 //postFX
 void createFrameBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& depthBufferId);
-void createColorFrameBuffer(int width, int height, unsigned int& colorBuffer1);
+void createFrameBufferColor(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2);
+void createBlur(int width, int height, unsigned int& colorBuffer1);
 void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2, unsigned int& depthBufferId);
 void renderToBuffer(FrameBuffer To, FrameBuffer From, unsigned int shader);
+void renderToScreen(unsigned int* framebuffers, int numFramebuffers);
 void renderQuad();
 
 //waterRendering
-void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer1, FrameBuffer targetBuffer2);
+void renderInvertedScene(glm::mat4 projection, FrameBuffer targetBuffer1);
 void renderWaterPlane(glm::mat4 projection, glm::mat4 view, FrameBuffer target, FrameBuffer InvertSource);
 
 //util
@@ -65,7 +67,7 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 
 // Program ID
 unsigned int shaderProgram, skyProgram, terrainProgram, waterProgram, modelProgram;
-unsigned int chromabbProgram, bloomProgram, blitProgram, gaussianBlurProgram;
+unsigned int chromabbProgram, bloomProgram, blitProgram, gaussianBlurProgram, PostProcessingProgram;
 unsigned int screenWidth = 1200;
 unsigned int screenHeight = 800;
 
@@ -123,14 +125,16 @@ int main()
 	// Create viewport
 	glViewport(0, 0, screenWidth, screenHeight);
 
-	setupRescources();
-
 	/*chromatic abberation*/
 	FrameBuffer PostPChrabb, PostPBloom, GaussianBlur ,scene;
 	createFrameBuffer(screenWidth, screenHeight, PostPChrabb.Id, PostPChrabb.color1, PostPChrabb.depth);
-	createFrameBuffer(screenWidth, screenHeight, PostPBloom.Id, PostPBloom.color1, PostPBloom.color2);
-	createColorFrameBuffer(screenWidth, screenHeight, GaussianBlur.color1);
+	createFrameBufferColor(screenWidth, screenHeight, PostPBloom.Id, PostPBloom.color1, PostPBloom.color2);
+	createBlur(screenWidth, screenHeight, GaussianBlur.color1);
 	createSceneBuffer(screenWidth, screenHeight, scene.Id, scene.color1, scene.color2, scene.depth);
+
+	setupRescources();
+
+	unsigned int framebuffers[2] = { PostPChrabb.color1, PostPBloom.color1 };
 
 	glm::mat4 view;
 	glm::mat4 projection;
@@ -143,12 +147,11 @@ int main()
 		processInput(window, deltaTime);
 		view = glm::lookAt(camPos, camPos + camFor, camUp);
 
-		//render scene
+		// Render scene to framebuffer
 		glBindFramebuffer(GL_FRAMEBUFFER, scene.Id);
 		glDrawBuffers(2, sceneAttach);
 			glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 
 			RenderSkybox(view, projection);
 			RenderTerrain(view, projection, glm::vec3(0,0,0));
@@ -165,14 +168,21 @@ int main()
 			RenderCube(view, projection);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		renderInvertedScene(projection ,PostPChrabb);
+		renderInvertedScene(projection, PostPChrabb);
 		renderWaterPlane(projection, view, scene, PostPChrabb);
 
-		//post processing
-		renderToBuffer(PostPChrabb, scene, chromabbProgram);
-		
+		//postBloom = screen - chroma - bloom
+		//GaussianBlur = postBloom blurred 
+		//GaussianBlur = add screens
+
+		//Post Fx
+		/*Apply chromatic aberration*/ renderToBuffer(PostPChrabb, scene, chromabbProgram);
+		/*Apply Bloom*/	renderToBuffer(PostPBloom, PostPChrabb, bloomProgram);
+		/*Apply Gaussian blur */ renderToBuffer(GaussianBlur, PostPBloom, gaussianBlurProgram);
+		/*Combine and render to screen*/ renderToScreen(framebuffers, 2);
+
 		//blit to screen
-		renderToBuffer(screenBuffer, PostPChrabb, blitProgram);
+		// renderToBuffer(screenBuffer, scene, PostProcessingProgram);
 
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
@@ -190,7 +200,6 @@ void setupRescources() {
 
 	terrainVAO = GeneratePlane("textures/terrainheightmap.png", GL_RGBA, 4, heightMapTexture, 100.0f, 5.0f, terrainIndexCount, heightMapId);
 	heightNormalId = loadTexture("textures/terrain_normalmap.png");
-
 	waterNormalId = loadTexture("textures/water_normalmap.jpg");
 
 	dirt = loadTexture("textures/terrain/dirt.jpg");
@@ -212,12 +221,24 @@ void setupRescources() {
 	CreateShader(terrainProgram, "shaders/terrain_vert.glsl", "shaders/terrain_frag.glsl");
 	CreateShader(modelProgram, "shaders/model_vert.glsl", "shaders/model_frag.glsl");
 	CreateShader(waterProgram, "shaders/water_vert.glsl", "shaders/water_frag.glsl");
+
 	//post processin
 	CreateShader(blitProgram, "shaders/pp/pp_vert.glsl", "shaders/pp/img_frag.glsl");
+	glUseProgram(blitProgram);
+	glUniform1i(glGetUniformLocation(chromabbProgram, "MainTex"), 0);
 	CreateShader(chromabbProgram, "shaders/pp/pp_vert.glsl", "shaders/pp/chrabb_frag.glsl");
+	glUseProgram(chromabbProgram);
+	glUniform1i(glGetUniformLocation(chromabbProgram, "MainTex"), 0);
 	CreateShader(bloomProgram, "shaders/pp/pp_vert.glsl", "shaders/pp/bloom_frag.glsl");
+	glUseProgram(bloomProgram);
+	glUniform1i(glGetUniformLocation(bloomProgram, "image"), 0);
 	CreateShader(gaussianBlurProgram, "shaders/pp/pp_vert.glsl", "shaders/pp/gaussian_blur_frag.glsl");
-	glUniform3fv(glGetUniformLocation(bloomProgram, "lightDir"), 1, glm::value_ptr(lightDir));
+	glUseProgram(gaussianBlurProgram);
+	glUniform1i(glGetUniformLocation(gaussianBlurProgram, "image"), 0);
+	glUniform1i(glGetUniformLocation(gaussianBlurProgram, "image2"), 1);
+
+	CreateShader(PostProcessingProgram, "shaders/pp/pp_add_vert.glsl", "shaders/pp/pp_add_frag.glsl");
+	glUseProgram(PostProcessingProgram);
 
 	glUseProgram(modelProgram);
 	glUniform1i(glGetUniformLocation(modelProgram, "texture_diffuse1"), 0);
@@ -225,8 +246,6 @@ void setupRescources() {
 	glUniform1i(glGetUniformLocation(modelProgram, "texture_normal1"), 2);
 	glUniform1i(glGetUniformLocation(modelProgram, "texture_roughness1"), 3);
 	glUniform1i(glGetUniformLocation(modelProgram, "texture_ao1"), 4);
-
-	glUseProgram(blitProgram);
 }
 
 /// <summary>
@@ -954,6 +973,40 @@ void createFrameBuffer(int width, int height, unsigned int& frameBufferId, unsig
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void createFrameBufferColor(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2) {
+	glGenFramebuffers(1, &frameBufferId);
+	glBindFramebuffer(GL_FRAMEBUFFER, frameBufferId);
+
+	// Bind and configure the first color buffer
+	glBindTexture(GL_TEXTURE_2D, colorBufferId);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// Attach texture to framebuffer
+	glFramebufferTexture2D(	GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorBufferId, 0);
+
+	// Bind and configure the second color buffer
+	glBindTexture(GL_TEXTURE_2D, colorBufferId2);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// Attach texture to framebuffer
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, colorBufferId2, 0);
+
+	// Check framebuffer completeness
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cout << "Framebuffer Colorbuffer is not complete!" << std::endl;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsigned int& colorBufferId, unsigned int& colorBufferId2, unsigned int& depthBufferId) {
 	// generate frame buffer
 	glGenFramebuffers(1, &frameBufferId);
@@ -976,7 +1029,6 @@ void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsig
 	glGenRenderbuffers(1, &depthBufferId);
 	glBindRenderbuffer(GL_RENDERBUFFER, depthBufferId);
 
-
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
 
 	// attach buffers
@@ -986,13 +1038,13 @@ void createSceneBuffer(int width, int height, unsigned int& frameBufferId, unsig
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferId);
 
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		std::cout << "Framebuffer not complete!" << std::endl;
+		std::cout << "Framebuffer depthbuffer not complete!" << std::endl;
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void createColorFrameBuffer(int width, int height, unsigned int& colorBuffer1) {
+void createBlur(int width, int height, unsigned int& colorBuffer1) {
 	unsigned int pingpongFBO[2];
 	unsigned int pingpongBuffer[2];
 	glGenFramebuffers(2, pingpongFBO);
@@ -1012,6 +1064,7 @@ void createColorFrameBuffer(int width, int height, unsigned int& colorBuffer1) {
 			GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0
 		);
 	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	bool horizontal = true, first_iteration = true;
 	unsigned int amount = 10;
@@ -1028,7 +1081,6 @@ void createColorFrameBuffer(int width, int height, unsigned int& colorBuffer1) {
 		if (first_iteration)
 			first_iteration = false;
 	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -1080,4 +1132,20 @@ void renderQuad()
 	glBindVertexArray(quadVAO);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glBindVertexArray(0);
+}
+
+void renderToScreen(unsigned int* framebuffers, int numFramebuffers) {
+	glBindFramebuffer(GL_FRAMEBUFFER, screenBuffer.Id);
+
+	glUseProgram(PostProcessingProgram);
+
+	for (int i = 0; i < numFramebuffers; i++) {
+		glUniform1i(glGetUniformLocation(PostProcessingProgram, ("framebuffers[" + std::to_string(i) + "]").c_str()), i);
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, framebuffers[i]);
+	}
+
+	glUniform1i(glGetUniformLocation(PostProcessingProgram, "numFramebuffers"), numFramebuffers);
+
+	renderQuad();
 }
