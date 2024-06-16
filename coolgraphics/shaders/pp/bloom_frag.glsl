@@ -7,7 +7,7 @@ uniform sampler2D image;
 void main()
 {            
     //FragColor = vec4(FragColor.rgb, 1.0);
-    FragColor = texture(image, fragCoord) * 0.1f;
+    FragColor = texture(image, fragCoord);
 
     float brightness = dot(FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
     if(brightness > 0.8)

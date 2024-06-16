@@ -69,8 +69,8 @@ void InfoShaderLog(unsigned int shaderId, int success, char* infoLog);
 // Program ID
 unsigned int shaderProgram, skyProgram, terrainProgram, waterProgram, modelProgram;
 unsigned int chromabbProgram, bloomProgram, blitProgram, gaussianBlurProgram, PostProcessingProgram;
-unsigned int screenWidth = 1400;
-unsigned int screenHeight = 1000;
+unsigned int screenWidth = 1920;
+unsigned int screenHeight = 1080;
 
 glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -0.5f, -0.5f));
 glm::vec3 camPos = glm::vec3(900, 500, 900);
@@ -115,6 +115,8 @@ unsigned int waterNormalId;
 
 unsigned int pingpongFBO[2];
 unsigned int pingpongBuffer[2];
+
+float bloomintensity = 0.2f;
 
 /// <summary>////////////////
 /// Functions/
@@ -176,15 +178,14 @@ int main()
 		renderInvertedScene(projection, PostPChrabb);
 		renderWaterPlane(projection, view, scene, PostPChrabb);
 
-		//Post Fx
-		/*Apply chromatic aberration*/ renderToBuffer(PostPChrabb, scene, chromabbProgram);
-		/*Apply Bloom*/				   renderToBuffer(PostPBloom, PostPChrabb, bloomProgram);
-		/*Apply Gaussian blur */	   GaussianBlur.color1 = renderBlur(PostPBloom.color1);
-		framebuffers[0] = PostPChrabb.color1;
-		framebuffers[1] = GaussianBlur.color1;
-		/*Combine and render  screen*/ renderToScreen(framebuffers);
-		//renderToBuffer(screenBuffer, GaussianBlur, blitProgram);
-
+		//Post Processing
+		/*Apply chromatic aberration*/			 renderToBuffer(PostPChrabb, scene, chromabbProgram);
+		/*Apply Bloom*/							 renderToBuffer(PostPBloom, PostPChrabb, bloomProgram);
+		/*Apply Gaussian blur */				 GaussianBlur.color1 = renderBlur(PostPBloom.color1);
+		/*setting framebuffer 1 to chromat abb*/ framebuffers[0] = PostPChrabb.color1;
+		/*setting framebuffer 2 to blured bloom*/framebuffers[1] = GaussianBlur.color1;
+		/*Combine n rnder screen*/				 renderToScreen(framebuffers); 
+		
 		// Swap buffers and poll events
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -239,6 +240,10 @@ void setupRescources() {
 
 	CreateShader(PostProcessingProgram, "shaders/pp/pp_add_vert.glsl", "shaders/pp/pp_add_frag.glsl");
 	glUseProgram(PostProcessingProgram);
+	glUniform1f(glGetUniformLocation(PostProcessingProgram, "bloomintensity"), bloomintensity);
+	if (glGetUniformLocation(PostProcessingProgram, "bloomintensity") == -1) {
+		std::cout << "SETTING BLOOM ERROR!" << std::endl;
+	}
 
 	glUseProgram(modelProgram);
 	glUniform1i(glGetUniformLocation(modelProgram, "texture_diffuse1"), 0);
